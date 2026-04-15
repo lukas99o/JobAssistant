@@ -1,0 +1,28 @@
+# Python bytecode cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Job history (runtime data)
+data/job_history.json
+
+# Personal documents (never commit)
+documents/CVs/*
+documents/PersonalLetters/*
+documents/Other/*
+!documents/CVs/.gitkeep
+!documents/PersonalLetters/.gitkeep
+!documents/Other/.gitkeep
+
+# Personal profile data
+config/profile.yaml
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# OS files
+.DS_Store
+Thumbs.db
