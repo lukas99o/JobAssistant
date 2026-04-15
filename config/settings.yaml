@@ -1,0 +1,22 @@
+# Application settings
+
+# Delay in seconds between actions (for visibility)
+action_delay: 1.5
+
+# Number of job listings to fetch per API page
+api_batch_size: 25
+
+# JobTech API base URL
+api_base_url: "https://jobsearch.api.jobtechdev.se"
+
+# Browser settings
+browser_headless: false
+browser_slow_mo: 500  # milliseconds between Playwright actions
+
+# Form submission behavior
+# false = fill form only, user submits manually
+# true = fill form and click submit automatically
+auto_submit: false
+
+# Maximum number of visible form fields to consider a form "simple"
+max_simple_form_fields: 10
