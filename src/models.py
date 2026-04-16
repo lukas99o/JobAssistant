@@ -115,6 +115,7 @@ class UserProfile:
     city: str = ""
     postal_code: str = ""
     country: str = ""
+    organization: str = ""
     title: str = ""
     professional_summary: str = ""
     linkedin: str = ""
@@ -139,6 +140,7 @@ class UserProfile:
             city=address.get("city", ""),
             postal_code=address.get("postal_code", ""),
             country=address.get("country", ""),
+            organization=personal.get("organization", ""),
             title=professional.get("title", ""),
             professional_summary=professional.get("summary", ""),
             linkedin=links.get("linkedin", ""),

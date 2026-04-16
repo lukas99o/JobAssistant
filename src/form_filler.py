@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,6 +18,7 @@ class FormField:
     name: str
     label: str
     is_file_upload: bool = False
+    question_label: str = ""  # enclosing fieldset legend, for radio/checkbox groups
 
 
 @dataclass
@@ -50,14 +52,18 @@ FIELD_MAP: dict[str, str] = {
     "mobil": "phone",
     "street": "street",
     "gata": "street",
+    "gatuadress": "street",
     "adress": "street",
     "address": "street",
     "city": "city",
     "stad": "city",
     "ort": "city",
+    "bostadsort": "city",
     "postal": "postal_code",
     "postnummer": "postal_code",
     "zip": "postal_code",
+    "country": "country",
+    "land": "country",
     "linkedin": "linkedin",
     "github": "github",
     "website": "website",
@@ -65,6 +71,17 @@ FIELD_MAP: dict[str, str] = {
     "url": "website",
     "title": "title",
     "titel": "title",
+    "role": "title",
+    "befattning": "title",
+    "position": "title",
+    "organisation": "organization",
+    "organization": "organization",
+}
+
+# Yes/No questions answered automatically (can be overridden in profile form_answers)
+YES_NO_DEFAULTS: dict[str, str] = {
+    "skallkrav": "Yes",
+    "meriterande": "Yes",
 }
 
 
@@ -120,6 +137,31 @@ def analyze_page(page: Page, settings: Settings) -> FormAnalysis:
             if is_file:
                 has_file_upload = True
 
+            # For radio/checkbox, try to capture the enclosing question text
+            question_label = ""
+            if input_type in ("radio", "checkbox"):
+                try:
+                    question_label = el.evaluate(
+                        """e => {
+                            const fs = e.closest('fieldset');
+                            if (fs) {
+                                const legend = fs.querySelector('legend');
+                                if (legend) return legend.textContent.trim();
+                            }
+                            // Fallback: look for a preceding sibling label/p/span
+                            let node = e.parentElement;
+                            while (node) {
+                                const q = node.querySelector('label, legend, p, span');
+                                if (q && q.textContent.trim()) return q.textContent.trim();
+                                node = node.parentElement;
+                                if (node && node.tagName === 'FORM') break;
+                            }
+                            return '';
+                        }"""
+                    ) or ""
+                except Exception:
+                    pass
+
             fields.append(FormField(
                 locator=el,
                 tag=tag,
@@ -127,6 +169,7 @@ def analyze_page(page: Page, settings: Settings) -> FormAnalysis:
                 name=name,
                 label=label_text,
                 is_file_upload=is_file,
+                question_label=question_label,
             ))
 
     # Find submit button
@@ -162,7 +205,7 @@ def analyze_page(page: Page, settings: Settings) -> FormAnalysis:
 
 def _match_field(f: FormField) -> str | None:
     """Return the profile attribute key that best matches this field, or None."""
-    search_text = f"{f.name} {f.label}".lower()
+    search_text = f"{f.name} {f.label} {f.question_label}".lower()
     for keyword, attr in FIELD_MAP.items():
         if keyword in search_text:
             return attr
@@ -182,14 +225,36 @@ OTHER_KEYWORDS = ["other", "övrigt", "övriga", "additional", "attachment", "bi
 
 
 def _classify_file_upload(f: FormField) -> str:
-    """Classify a file upload field as 'cv', 'letter', or 'other'."""
-    search_text = f"{f.name} {f.label}".lower()
-    for kw in CV_KEYWORDS:
-        if kw in search_text:
-            return "cv"
+    """Classify a file upload field as 'cv', 'letter', or 'other'.
+
+    Label text is checked first since it is semantically more reliable than
+    the raw HTML name attribute. 'cv' is matched as a whole word to avoid
+    false positives from name attributes like 'cv_other' or 'recv'.
+    """
+    label = f.label.lower()
+    name = f.name.lower()
+
+    # Check label first — it reflects what the user sees
     for kw in LETTER_KEYWORDS:
-        if kw in search_text:
+        if kw in label:
             return "letter"
+    for kw in OTHER_KEYWORDS:
+        if kw in label:
+            return "other"
+    # 'cv' requires a word boundary; other CV keywords are long enough to be safe
+    if re.search(r'\bcv\b', label) or any(kw in label for kw in CV_KEYWORDS[1:]):
+        return "cv"
+
+    # Fall back to name attribute with the same precedence
+    for kw in LETTER_KEYWORDS:
+        if kw in name:
+            return "letter"
+    for kw in OTHER_KEYWORDS:
+        if kw in name:
+            return "other"
+    if re.search(r'\bcv\b', name) or any(kw in name for kw in CV_KEYWORDS[1:]):
+        return "cv"
+
     return "other"
 
 
@@ -215,7 +280,7 @@ def _match_form_answer(f: FormField, profile: UserProfile) -> str | None:
     if not profile.form_answers:
         return None
 
-    search_text = f"{f.name} {f.label}".lower()
+    search_text = f"{f.name} {f.label} {f.question_label}".lower()
 
     # Check language answers
     languages = profile.form_answers.get("languages") or {}
@@ -235,6 +300,19 @@ def _match_form_answer(f: FormField, profile: UserProfile) -> str | None:
         if keyword.lower().replace("_", " ") in search_text or keyword.lower() in search_text:
             return str(value)
 
+    return None
+
+
+def _match_yes_no_default(f: FormField, profile: UserProfile) -> str | None:
+    """Return hardcoded default answer for well-known yes/no questions.
+
+    Profile form_answers can override any default by defining the same keyword
+    under yes_no — they are checked first in fill_form before this function.
+    """
+    search_text = f"{f.name} {f.label} {f.question_label}".lower()
+    for keyword, answer in YES_NO_DEFAULTS.items():
+        if keyword in search_text:
+            return answer
     return None
 
 
@@ -325,6 +403,25 @@ def fill_form(
                 else:
                     f.locator.fill(answer)
                 print(f"    Filled '{f.label or f.name}' → form_answer: {answer}")
+                filled_count += 1
+                time.sleep(0.3)
+            except Exception as e:
+                print(f"    Could not fill '{f.label or f.name}': {e}")
+            continue
+
+        # Try hardcoded yes/no defaults (e.g. "matchar du skallkraven" → Yes)
+        default_answer = _match_yes_no_default(f, profile)
+        if default_answer and f.input_type in ("checkbox", "radio", "text", "select-one"):
+            try:
+                if f.tag == "select":
+                    f.locator.select_option(label=default_answer)
+                elif f.input_type in ("checkbox", "radio"):
+                    if default_answer.lower() in ("yes", "true", "ja"):
+                        if not f.locator.is_checked():
+                            f.locator.check()
+                else:
+                    f.locator.fill(default_answer)
+                print(f"    Filled '{f.label or f.name}' → default: {default_answer}")
                 filled_count += 1
                 time.sleep(0.3)
             except Exception as e:

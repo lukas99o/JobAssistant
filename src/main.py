@@ -140,6 +140,7 @@ def process_job(
 
     elif method == "email":
         print(f"  Email application: {job.application_email}")
+        print(f"  Job posting: https://arbetsformedlingen.se/platsbanken/annonser/{job.id}")
         if job.application_info:
             print(f"  Instructions: {job.application_info}")
         input("  Complete the application manually, then press Enter to continue...")
