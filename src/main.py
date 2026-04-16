@@ -116,6 +116,10 @@ def process_job(
 
             analysis = analyze_page(page, settings)
 
+            if not analysis.fields:
+                if browser.try_click_apply_button():
+                    analysis = analyze_page(page, settings)
+
             if analysis.is_simple:
                 filled = fill_form(page, analysis, profile, selected_files, settings)
                 if filled:
