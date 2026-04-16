@@ -51,7 +51,7 @@ class JobListing:
         """Extract company purpose from the description (first ~500 words / 3000 chars)."""
         if not self.description:
             return ""
-        text = self.description.strip().replace("\n", " ")
+        text = self.description.strip()
         return text[:3000] + ("..." if len(text) > 3000 else "")
 
     @property
