@@ -48,11 +48,11 @@ class JobListing:
 
     @property
     def company_purpose(self) -> str:
-        """Extract a brief company purpose from the description (first 200 chars)."""
+        """Extract company purpose from the description (first ~500 words / 3000 chars)."""
         if not self.description:
             return ""
         text = self.description.strip().replace("\n", " ")
-        return text[:200] + ("..." if len(text) > 200 else "")
+        return text[:3000] + ("..." if len(text) > 3000 else "")
 
     @property
     def summary(self) -> str:
@@ -120,6 +120,7 @@ class UserProfile:
     linkedin: str = ""
     github: str = ""
     website: str = ""
+    form_answers: dict = field(default_factory=dict)
 
     @classmethod
     def from_yaml(cls, data: dict) -> UserProfile:
@@ -127,6 +128,7 @@ class UserProfile:
         address = personal.get("address") or {}
         professional = data.get("professional") or {}
         links = data.get("links") or {}
+        form_answers = data.get("form_answers") or {}
 
         return cls(
             first_name=personal.get("first_name", ""),
@@ -142,6 +144,7 @@ class UserProfile:
             linkedin=links.get("linkedin", ""),
             github=links.get("github", ""),
             website=links.get("website", ""),
+            form_answers=form_answers,
         )
 
     @property
@@ -170,6 +173,7 @@ class Settings:
     browser_slow_mo: int = 500
     auto_submit: bool = False
     max_simple_form_fields: int = 10
+    auto_accept_cookies: bool = True
 
     @classmethod
     def from_yaml(cls, data: dict) -> Settings:
@@ -181,4 +185,5 @@ class Settings:
             browser_slow_mo=data.get("browser_slow_mo", 500),
             auto_submit=data.get("auto_submit", False),
             max_simple_form_fields=data.get("max_simple_form_fields", 10),
+            auto_accept_cookies=data.get("auto_accept_cookies", True),
         )

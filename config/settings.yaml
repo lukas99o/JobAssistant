@@ -20,3 +20,6 @@ auto_submit: false
 
 # Maximum number of visible form fields to consider a form "simple"
 max_simple_form_fields: 10
+
+# Automatically accept cookie consent banners
+auto_accept_cookies: true

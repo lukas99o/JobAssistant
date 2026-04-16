@@ -27,8 +27,41 @@ class BrowserManager:
         if not self._page:
             raise RuntimeError("Browser not started. Call start() first.")
         self._page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        if self._settings.auto_accept_cookies:
+            self._dismiss_cookies()
         time.sleep(self._settings.action_delay)
         return self._page
+
+    def _dismiss_cookies(self) -> None:
+        """Try to accept/dismiss common cookie consent banners."""
+        if not self._page:
+            return
+        cookie_selectors = [
+            "button:has-text('Accept')",
+            "button:has-text('Acceptera')",
+            "button:has-text('Godkänn')",
+            "button:has-text('Accept all')",
+            "button:has-text('Acceptera alla')",
+            "button:has-text('Allow all')",
+            "button:has-text('I agree')",
+            "button:has-text('OK')",
+            "button:has-text('Got it')",
+            "button:has-text('Agree')",
+            "[id*='cookie'] button",
+            "[class*='cookie'] button",
+            "[id*='consent'] button",
+            "[class*='consent'] button",
+        ]
+        for selector in cookie_selectors:
+            try:
+                btn = self._page.locator(selector).first
+                if btn.is_visible(timeout=1000):
+                    btn.click()
+                    print("  Cookies accepted.")
+                    time.sleep(0.5)
+                    return
+            except Exception:
+                continue
 
     @property
     def page(self) -> Page:

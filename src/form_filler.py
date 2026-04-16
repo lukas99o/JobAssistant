@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from playwright.sync_api import Page, Locator
 
@@ -174,6 +175,69 @@ def _get_profile_value(profile: UserProfile, attr: str) -> str:
     return getattr(profile, attr, "")
 
 
+# Keywords to identify file upload field purpose
+CV_KEYWORDS = ["cv", "resume", "curriculum", "meritförteckning", "cv/resume"]
+LETTER_KEYWORDS = ["personligt brev", "personal letter", "cover letter", "brev", "motivational", "motivation"]
+OTHER_KEYWORDS = ["other", "övrigt", "övriga", "additional", "attachment", "bilaga", "dokument"]
+
+
+def _classify_file_upload(f: FormField) -> str:
+    """Classify a file upload field as 'cv', 'letter', or 'other'."""
+    search_text = f"{f.name} {f.label}".lower()
+    for kw in CV_KEYWORDS:
+        if kw in search_text:
+            return "cv"
+    for kw in LETTER_KEYWORDS:
+        if kw in search_text:
+            return "letter"
+    return "other"
+
+
+def _is_personal_letter_textarea(f: FormField) -> bool:
+    """Check if a textarea is meant for personal letter / cover letter text."""
+    search_text = f"{f.name} {f.label}".lower()
+    for kw in LETTER_KEYWORDS:
+        if kw in search_text:
+            return True
+    return False
+
+
+def _read_text_file(path: Path) -> str:
+    """Read text content from a file. Supports .txt files."""
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
+
+
+def _match_form_answer(f: FormField, profile: UserProfile) -> str | None:
+    """Try to match a field against predefined form_answers in the profile."""
+    if not profile.form_answers:
+        return None
+
+    search_text = f"{f.name} {f.label}".lower()
+
+    # Check language answers
+    languages = profile.form_answers.get("languages") or {}
+    for lang, value in languages.items():
+        if lang.lower() in search_text:
+            return str(value)
+
+    # Check yes/no answers
+    yes_no = profile.form_answers.get("yes_no") or {}
+    for keyword, value in yes_no.items():
+        if keyword.lower().replace("_", " ") in search_text or keyword.lower() in search_text:
+            return str(value)
+
+    # Check freeform text answers
+    text_answers = profile.form_answers.get("text") or {}
+    for keyword, value in text_answers.items():
+        if keyword.lower().replace("_", " ") in search_text or keyword.lower() in search_text:
+            return str(value)
+
+    return None
+
+
 def fill_form(
     page: Page,
     analysis: FormAnalysis,
@@ -189,45 +253,82 @@ def fill_form(
 
     for f in analysis.fields:
         if f.is_file_upload:
-            # Attach documents to file upload fields
-            files_to_upload = []
-            if selected_files.cv_path and selected_files.cv_path.exists():
-                files_to_upload.append(str(selected_files.cv_path))
-            if selected_files.personal_letter_path and selected_files.personal_letter_path.exists():
-                files_to_upload.append(str(selected_files.personal_letter_path))
-            for p in selected_files.other_paths:
-                if p.exists():
-                    files_to_upload.append(str(p))
+            # Route files to the correct upload field based on label
+            upload_type = _classify_file_upload(f)
+            file_to_upload = None
 
-            if files_to_upload:
+            if upload_type == "cv" and selected_files.cv_path and selected_files.cv_path.exists():
+                file_to_upload = [str(selected_files.cv_path)]
+            elif upload_type == "letter" and selected_files.personal_letter_path and selected_files.personal_letter_path.exists():
+                file_to_upload = [str(selected_files.personal_letter_path)]
+            elif upload_type == "other" and selected_files.other_paths:
+                file_to_upload = [str(p) for p in selected_files.other_paths if p.exists()]
+            else:
+                # Fallback: if field is unclassified, try CV first
+                if selected_files.cv_path and selected_files.cv_path.exists():
+                    file_to_upload = [str(selected_files.cv_path)]
+
+            if file_to_upload:
                 try:
-                    f.locator.set_input_files(files_to_upload)
-                    names = ", ".join(p.split("\\")[-1].split("/")[-1] for p in files_to_upload)
-                    print(f"    Attached: {names}")
+                    f.locator.set_input_files(file_to_upload)
+                    names = ", ".join(p.split("\\")[-1].split("/")[-1] for p in file_to_upload)
+                    print(f"    Attached ({upload_type}): {names}")
                     filled_count += 1
                 except Exception as e:
                     print(f"    Failed to attach files: {e}")
             continue
 
+        # Check if this is a textarea meant for personal letter text
+        if f.tag == "textarea" and _is_personal_letter_textarea(f):
+            if selected_files.personal_letter_path and selected_files.personal_letter_path.exists():
+                letter_text = _read_text_file(selected_files.personal_letter_path)
+                if letter_text:
+                    try:
+                        f.locator.fill(letter_text)
+                        print(f"    Filled personal letter text from {selected_files.personal_letter_path.name}")
+                        filled_count += 1
+                        time.sleep(0.3)
+                    except Exception as e:
+                        print(f"    Could not fill personal letter text: {e}")
+            continue
+
+        # Try profile field match first
         attr = _match_field(f)
-        if not attr:
-            continue
+        if attr:
+            value = _get_profile_value(profile, attr)
+            if value:
+                try:
+                    if f.tag == "select":
+                        f.locator.select_option(label=value)
+                    else:
+                        f.locator.fill(value)
+                    print(f"    Filled '{f.label or f.name}' → {attr}")
+                    filled_count += 1
+                    time.sleep(0.3)
+                except Exception as e:
+                    print(f"    Could not fill '{f.label or f.name}': {e}")
+                continue
 
-        value = _get_profile_value(profile, attr)
-        if not value:
-            continue
-
-        try:
-            if f.tag == "select":
-                # Try to select by visible text
-                f.locator.select_option(label=value)
-            else:
-                f.locator.fill(value)
-            print(f"    Filled '{f.label or f.name}' → {attr}")
-            filled_count += 1
-            time.sleep(0.3)
-        except Exception as e:
-            print(f"    Could not fill '{f.label or f.name}': {e}")
+        # Try predefined form answers
+        answer = _match_form_answer(f, profile)
+        if answer:
+            try:
+                if f.tag == "select":
+                    f.locator.select_option(label=answer)
+                elif f.input_type in ("checkbox", "radio"):
+                    if answer.lower() in ("yes", "true", "ja"):
+                        if not f.locator.is_checked():
+                            f.locator.check()
+                    elif answer.lower() in ("no", "false", "nej"):
+                        if f.locator.is_checked():
+                            f.locator.uncheck()
+                else:
+                    f.locator.fill(answer)
+                print(f"    Filled '{f.label or f.name}' → form_answer: {answer}")
+                filled_count += 1
+                time.sleep(0.3)
+            except Exception as e:
+                print(f"    Could not fill '{f.label or f.name}': {e}")
 
     print(f"  Filled {filled_count} field(s).")
 

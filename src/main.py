@@ -119,21 +119,19 @@ def process_job(
             if analysis.is_simple:
                 filled = fill_form(page, analysis, profile, selected_files, settings)
                 if filled:
-                    input("  Press Enter when done to continue...")
+                    if not settings.auto_submit:
+                        input("  Press Enter when done to continue...")
                     history.record(job, "applied", query)
                     stats.applied += 1
                 else:
-                    history.record(job, "skipped", query)
                     stats.skipped += 1
             else:
                 print(f"  {analysis.reason}")
                 print("  Skipping complex form.")
-                history.record(job, "skipped", query)
                 stats.skipped += 1
 
         except Exception as e:
             print(f"  Error navigating to application: {e}")
-            history.record(job, "skipped", query)
             stats.skipped += 1
 
     elif method == "email":
@@ -148,7 +146,6 @@ def process_job(
         print("  No application method found. Skipping.")
         if job.application_info:
             print(f"  Info: {job.application_info}")
-        history.record(job, "skipped", query)
         stats.skipped += 1
 
     stats.processed += 1

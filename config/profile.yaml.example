@@ -2,7 +2,7 @@
 # Fill in your details below. Leave fields blank if not applicable.
 
 personal:
-  first_name: "f"
+  first_name: ""
   last_name: ""
   email: ""
   phone: ""
@@ -16,28 +16,31 @@ professional:
   title: ""  # e.g. "Software Developer"
   summary: ""  # Brief professional summary
 
-  work_experience:
-    - company: ""
-      title: ""
-      start_date: ""  # YYYY-MM
-      end_date: ""     # YYYY-MM or "present"
-      description: ""
-
-  education:
-    - institution: ""
-      degree: ""
-      field: ""
-      start_date: ""
-      end_date: ""
-
-  skills:
-    - ""
-
-  languages:
-    - language: ""
-      level: ""  # e.g. "Native", "Fluent", "Intermediate", "Basic"
-
 links:
   linkedin: ""
   github: ""
   website: ""
+
+# Predefined answers for common form questions
+# These are matched by keywords in field labels/names
+form_answers:
+  # Language skills - matched when a field label contains the language name
+  # Values: "Yes", "No", or a proficiency level like "Fluent", "Native", "Basic"
+  languages:
+    swedish: "Fluent"
+    english: "Fluent"
+
+  # Yes/No answers - matched when a field label contains the keyword
+  # Use for questions like "Do you have a drivers license?", "Willing to relocate?"
+  yes_no:
+    # drivers_license: "Yes"
+    # relocate: "Yes"
+    # work_permit: "Yes"
+    # eu_citizen: "Yes"
+
+  # Freeform answers - matched when a field label contains the keyword
+  # Use for short text fields like "Expected salary", "Available from"
+  text:
+    # salary: "Negotiable"
+    # availability: "Immediately"
+    # notice_period: "1 month"
