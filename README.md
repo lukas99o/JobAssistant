@@ -45,6 +45,10 @@ Place your files in the relevant folders:
 - `documents\PersonalLetters\` — your personal letter (PDF for upload fields, `.txt` for text fields)
 - `documents\Other\` — any other attachments (optional)
 
+**5. Create job_history.json**
+
+Copy the example job_history and rename the copy to job_history.json
+
 ## Running the application
 
 ```

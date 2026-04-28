@@ -6,6 +6,7 @@ personal:
   last_name: ""
   email: ""
   phone: ""
+  organization: ""  # Current or most recent employer/organization
   address:
     street: ""
     city: ""
@@ -37,10 +38,17 @@ form_answers:
     # relocate: "Yes"
     # work_permit: "Yes"
     # eu_citizen: "Yes"
+    # skallkrav and meriterande are auto-answered "Yes" by default (built-in).
+    # Override here only if you want a different answer:
+    # skallkrav: "Yes"
+    # meriterande: "Yes"
 
   # Freeform answers - matched when a field label contains the keyword
   # Use for short text fields like "Expected salary", "Available from"
   text:
     # salary: "Negotiable"
+    # lönanspråk: "Negotiable"          # Swedish: expected salary
     # availability: "Immediately"
     # notice_period: "1 month"
+    # uppsägningstid: "1 månad"         # Swedish: notice period
+    # tidigast_tillgänglig: "Omgående"  # Swedish: earliest availability

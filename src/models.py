@@ -51,7 +51,7 @@ class JobListing:
         """Extract company purpose from the description (first ~500 words / 3000 chars)."""
         if not self.description:
             return ""
-        text = self.description.strip().replace("\n", " ")
+        text = self.description.strip()
         return text[:3000] + ("..." if len(text) > 3000 else "")
 
     @property
@@ -115,6 +115,7 @@ class UserProfile:
     city: str = ""
     postal_code: str = ""
     country: str = ""
+    organization: str = ""
     title: str = ""
     professional_summary: str = ""
     linkedin: str = ""
@@ -139,6 +140,7 @@ class UserProfile:
             city=address.get("city", ""),
             postal_code=address.get("postal_code", ""),
             country=address.get("country", ""),
+            organization=personal.get("organization", ""),
             title=professional.get("title", ""),
             professional_summary=professional.get("summary", ""),
             linkedin=links.get("linkedin", ""),

@@ -116,6 +116,10 @@ def process_job(
 
             analysis = analyze_page(page, settings)
 
+            if not analysis.fields:
+                if browser.try_click_apply_button():
+                    analysis = analyze_page(page, settings)
+
             if analysis.is_simple:
                 filled = fill_form(page, analysis, profile, selected_files, settings)
                 if filled:
@@ -138,6 +142,7 @@ def process_job(
 
     elif method == "email":
         print(f"  Email application: {job.application_email}")
+        print(f"  Job posting: https://arbetsformedlingen.se/platsbanken/annonser/{job.id}")
         if job.application_info:
             print(f"  Instructions: {job.application_info}")
         input("  Complete the application manually, then press Enter to continue...")
