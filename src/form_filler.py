@@ -15,6 +15,7 @@ class FormField:
     locator: Locator
     tag: str
     input_type: str
+    element_id: str
     name: str
     label: str
     is_file_upload: bool = False
@@ -111,11 +112,13 @@ def analyze_page(page: Page, settings: Settings) -> FormAnalysis:
         elements = target_form.locator(selector)
         for i in range(elements.count()):
             el = elements.nth(i)
-            if not el.is_visible():
-                continue
-
             tag = selector
             input_type = el.get_attribute("type") or "text"
+
+            # Keep hidden <input type="file"> fields: many sites style them as hidden
+            # and trigger them through a custom button.
+            if not el.is_visible() and not (selector == "input" and input_type == "file"):
+                continue
 
             if input_type in ("hidden", "submit", "button", "reset", "image"):
                 continue
@@ -166,6 +169,7 @@ def analyze_page(page: Page, settings: Settings) -> FormAnalysis:
                 locator=el,
                 tag=tag,
                 input_type=input_type,
+                element_id=el_id,
                 name=name,
                 label=label_text,
                 is_file_upload=is_file,
@@ -316,6 +320,26 @@ def _match_yes_no_default(f: FormField, profile: UserProfile) -> str | None:
     return None
 
 
+def _resolve_file_input_locator(page: Page, f: FormField) -> Locator | None:
+    """Resolve a stable locator for a file input field."""
+    candidates: list[Locator] = []
+
+    if f.element_id:
+        candidates.append(page.locator(f'input[type="file"][id="{f.element_id}"]'))
+    if f.name:
+        candidates.append(page.locator(f'input[type="file"][name="{f.name}"]'))
+    candidates.append(f.locator)
+
+    for candidate in candidates:
+        if candidate.count() == 0:
+            continue
+        resolved = candidate.first
+        if (resolved.get_attribute("type") or "").lower() == "file":
+            return resolved
+
+    return None
+
+
 def fill_form(
     page: Page,
     analysis: FormAnalysis,
@@ -348,7 +372,11 @@ def fill_form(
 
             if file_to_upload:
                 try:
-                    f.locator.set_input_files(file_to_upload)
+                    upload_locator = _resolve_file_input_locator(page, f)
+                    if not upload_locator:
+                        print(f"    Could not locate a valid file input for '{f.label or f.name}'.")
+                        continue
+                    upload_locator.set_input_files(file_to_upload)
                     names = ", ".join(p.split("\\")[-1].split("/")[-1] for p in file_to_upload)
                     print(f"    Attached ({upload_type}): {names}")
                     filled_count += 1
