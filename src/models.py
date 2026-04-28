@@ -91,17 +91,13 @@ class JobHistoryRecord:
 class SelectedFiles:
     cv_path: Path | None = None
     personal_letter_path: Path | None = None
-    other_paths: list[Path] = field(default_factory=list)
+    other_path: Path | None = None
 
     def display(self) -> str:
         lines = []
         lines.append(f"  CV: {self.cv_path.name if self.cv_path else 'None'}")
         lines.append(f"  Personal letter: {self.personal_letter_path.name if self.personal_letter_path else 'None'}")
-        if self.other_paths:
-            names = ", ".join(p.name for p in self.other_paths)
-            lines.append(f"  Other files: {names}")
-        else:
-            lines.append("  Other files: None")
+        lines.append(f"  Other file: {self.other_path.name if self.other_path else 'None'}")
         return "\n".join(lines)
 
 

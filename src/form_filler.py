@@ -339,8 +339,8 @@ def fill_form(
                 file_to_upload = [str(selected_files.cv_path)]
             elif upload_type == "letter" and selected_files.personal_letter_path and selected_files.personal_letter_path.exists():
                 file_to_upload = [str(selected_files.personal_letter_path)]
-            elif upload_type == "other" and selected_files.other_paths:
-                file_to_upload = [str(p) for p in selected_files.other_paths if p.exists()]
+            elif upload_type == "other" and selected_files.other_path and selected_files.other_path.exists():
+                file_to_upload = [str(selected_files.other_path)]
             else:
                 # Fallback: if field is unclassified, try CV first
                 if selected_files.cv_path and selected_files.cv_path.exists():
