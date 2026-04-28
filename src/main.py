@@ -32,7 +32,7 @@ class SessionStats:
         print("\n=== Session Summary ===")
         print(f"  Processed: {self.processed}")
         print(f"  Applied (form filled): {self.applied}")
-        print(f"  Manual (email): {self.manual}")
+        print(f"  Manual (email/complex form): {self.manual}")
         print(f"  Skipped: {self.skipped}")
 
 
@@ -127,8 +127,10 @@ def process_job(
                     stats.skipped += 1
             else:
                 print(f"  {analysis.reason}")
-                print("  Skipping complex form.")
-                stats.skipped += 1
+                fill_form(page, analysis, profile, selected_files, settings, force_manual=True)
+                input("  Complete any remaining fields and submit manually, then press Enter to continue...")
+                history.record(job, "manual", query)
+                stats.manual += 1
 
         except Exception as e:
             print(f"  Error navigating to application: {e}")

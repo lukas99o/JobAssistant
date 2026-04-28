@@ -244,10 +244,10 @@ def fill_form(
     profile: UserProfile,
     selected_files: SelectedFiles,
     settings: Settings,
+    force_manual: bool = False,
 ) -> bool:
     if not analysis.is_simple:
-        print(f"  Complex form detected: {analysis.reason}. Skipping.")
-        return False
+        print(f"  Complex form detected: {analysis.reason}. Attempting partial autofill.")
 
     filled_count = 0
 
@@ -332,12 +332,14 @@ def fill_form(
 
     print(f"  Filled {filled_count} field(s).")
 
-    if settings.auto_submit and analysis.submit_button:
+    should_auto_submit = settings.auto_submit and analysis.is_simple and not force_manual
+
+    if should_auto_submit and analysis.submit_button:
         print("  Auto-submitting form...")
         analysis.submit_button.click()
         time.sleep(settings.action_delay)
         print("  Form submitted.")
-    elif not settings.auto_submit:
+    else:
         print("  Review the form and submit manually.")
 
     return True
