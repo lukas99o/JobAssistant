@@ -43,9 +43,15 @@ def select_files(documents_dir: Path) -> SelectedFiles:
     print("\n=== Document Selection ===")
 
     cv = _pick_one(_list_files(documents_dir / "CVs"), "CV")
-    letter = _pick_one(_list_files(documents_dir / "PersonalLetters"), "personal letter")
+    letter = _pick_one(_list_files(documents_dir / "PersonalLetters"), "personal letter (PDF)")
+    letter_text = _pick_one(_list_files(documents_dir / "PersonalLettersText"), "personal letter text (.txt)")
     other = _pick_one(_list_files(documents_dir / "Other"), "other file")
 
-    selected = SelectedFiles(cv_path=cv, personal_letter_path=letter, other_path=other)
+    selected = SelectedFiles(
+        cv_path=cv,
+        personal_letter_path=letter,
+        personal_letter_text_path=letter_text,
+        other_path=other,
+    )
     print(f"\nSelected files:\n{selected.display()}")
     return selected

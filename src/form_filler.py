@@ -386,16 +386,19 @@ def fill_form(
 
         # Check if this is a textarea meant for personal letter text
         if f.tag == "textarea" and _is_personal_letter_textarea(f):
-            if selected_files.personal_letter_path and selected_files.personal_letter_path.exists():
-                letter_text = _read_text_file(selected_files.personal_letter_path)
+            text_path = selected_files.personal_letter_text_path
+            if text_path and text_path.exists():
+                letter_text = _read_text_file(text_path)
                 if letter_text:
                     try:
                         f.locator.fill(letter_text)
-                        print(f"    Filled personal letter text from {selected_files.personal_letter_path.name}")
+                        print(f"    Filled personal letter text from {text_path.name}")
                         filled_count += 1
                         time.sleep(0.3)
                     except Exception as e:
                         print(f"    Could not fill personal letter text: {e}")
+            else:
+                print("    Personal letter text field found but no .txt file selected (PersonalLettersText folder).")
             continue
 
         # Try profile field match first
