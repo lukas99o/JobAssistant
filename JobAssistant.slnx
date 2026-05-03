@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="JobAssistant.Browser/JobAssistant.Browser.csproj" />
+  <Project Path="JobAssistant.Console/JobAssistant.Console.csproj" />
+  <Project Path="JobAssistant.Core/JobAssistant.Core.csproj" />
+  <Project Path="JobAssistant.Tests/JobAssistant.Tests.csproj" />
+</Solution>

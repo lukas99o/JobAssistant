@@ -1,8 +1,7 @@
-# Python bytecode cache
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+# .NET build artifacts
+**/bin/
+**/obj/
+TestResults/
 
 # Job history (runtime data)
 data/job_history.json
@@ -17,11 +16,6 @@ documents/Other/*
 
 # Personal profile data
 config/profile.yaml
-
-# Virtual environments
-.venv/
-venv/
-env/
 
 # OS files
 .DS_Store

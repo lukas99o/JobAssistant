@@ -1,65 +1,79 @@
 # Job Application Assistant
 
-A Python tool that fetches job listings from Arbetsförmedlingen and helps you apply to them one by one. It opens a browser so you can see what it's doing, fills in application forms using your personal profile, and attaches your CV and personal letter automatically.
+A .NET 10 console application for working through Arbetsförmedlingen job listings with your existing profile, document, and history files.
 
-## What it does
+## Current Status
 
-- Searches jobs on Arbetsförmedlingen via the public JobTech API
-- Opens each job's external application page in a browser
-- Fills in simple forms (name, email, phone, etc.) using your profile
-- Uploads your CV and personal letter to the correct fields
-- Pastes your personal letter as text if the form uses a text field
-- Accepts cookie banners automatically
-- Tracks which jobs you've already processed so they won't appear again
-- Prompts you between pages to continue, change files, or start a new search
+The repository has been switched over to the .NET implementation.
+
+Implemented today:
+- YAML-based settings and profile loading
+- Interactive document selection
+- JobTech API search
+- Job history persistence and deduplication
+- Playwright-based browser manager foundation
+- Root solution, test project, and PowerShell launcher
+
+Still being ported:
+- Form analysis and auto-fill heuristics
+- File-upload routing
+- End-to-end browser application flow
 
 ## Requirements
 
 - Windows
-- Python 3.13 — download from [python.org](https://www.python.org/downloads/)
+- .NET 10 SDK
 
 ## Setup
 
-**1. Install dependencies**
-```
-python -m pip install -r requirements.txt
-```
-
-**2. Install the browser**
-```
-python -m playwright install chromium
+**1. Build the solution**
+```powershell
+dotnet build JobAssistant.slnx
 ```
 
-**3. Create your profile**
+**2. Create your profile**
 
 Copy the example profile and fill in your details:
+```powershell
+Copy-Item config\profile.yaml.example config\profile.yaml
 ```
-copy config\profile.yaml.example config\profile.yaml
-```
+
 Open `config\profile.yaml` and fill in your name, email, phone, and any other details.
 
-**4. Add your documents**
+**3. Add your documents**
 
 Place your files in the relevant folders:
-- `documents\CVs\` — your CV (PDF recommended)
-- `documents\PersonalLetters\` — your personal letter (PDF for upload fields, `.txt` for text fields)
-- `documents\Other\` — any other attachments (optional)
+- `documents\CVs\` — your CV
+- `documents\PersonalLetters\` — your personal letter
+- `documents\Other\` — any other attachments
 
-**5. Create job_history.json**
+**4. Create job_history.json**
 
-Copy the example job_history and rename the copy to job_history.json
+Copy the example file and rename it to `job_history.json`.
 
 ## Running the application
 
-```
-python -m src.main
+```powershell
+.\run.ps1
 ```
 
-At startup you will:
+Or run the console project directly:
+
+```powershell
+dotnet run --project .\JobAssistant.Console\JobAssistant.Console.csproj
+```
+
+The current .NET console flow will:
 1. Select which CV, personal letter, and other files to use
-2. Enter your search terms (e.g. `python stockholm` or `c# developer`)
+2. Prompt for search terms
+3. Fetch the first JobTech results page
+4. Filter out already processed jobs and show the new ones
 
-The tool then fetches matching jobs and processes them one by one in a browser window.
+## Testing
+
+```powershell
+dotnet test JobAssistant.slnx --no-build
+```
 
 ## Settings
 
@@ -67,13 +81,13 @@ Open `config\settings.yaml` to adjust behaviour:
 
 | Setting | Default | Description |
 |---|---|---|
-| `auto_submit` | `false` | Set to `true` to submit forms automatically |
-| `auto_accept_cookies` | `true` | Automatically dismiss cookie banners |
-| `action_delay` | `1.5` | Seconds to wait between actions (increase for slower connections) |
-| `browser_slow_mo` | `500` | Milliseconds between browser actions (makes it easier to follow) |
+| `auto_submit` | `false` | Reserved for the form-submission port |
+| `auto_accept_cookies` | `true` | Used by the browser layer |
+| `action_delay` | `1.5` | Delay between browser actions |
+| `browser_slow_mo` | `500` | Milliseconds between Playwright actions |
 | `api_batch_size` | `25` | Number of jobs to fetch per page |
-| `max_simple_form_fields` | `10` | Forms with more fields than this are skipped as too complex |
+| `max_simple_form_fields` | `10` | Reserved for the form-analysis port |
 
-## Job history
+## Job History
 
-Processed jobs are saved to `data\job_history.json`. Jobs you have already applied to or handled manually will not appear in future searches.
+Processed jobs are saved to `data\job_history.json`. Jobs already recorded there are filtered out on later searches.

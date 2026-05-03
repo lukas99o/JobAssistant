@@ -1,12 +1,11 @@
 # Run the Job Application Assistant
-# Uses the real Python 3.13 explicitly, bypassing the Windows Store alias
 
-$pythonExe = "C:\Users\Lukas\AppData\Local\Programs\Python\Python313\python.exe"
+$dotnetExe = Get-Command dotnet -ErrorAction SilentlyContinue
 
-if (-not (Test-Path $pythonExe)) {
-    Write-Error "Python not found at $pythonExe. Please reinstall Python 3.13."
+if (-not $dotnetExe) {
+    Write-Error ".NET SDK not found. Install the .NET 10 SDK and try again."
     exit 1
 }
 
 Set-Location $PSScriptRoot
-& $pythonExe -m src.main
+& dotnet run --project .\JobAssistant.Console\JobAssistant.Console.csproj -- @args
