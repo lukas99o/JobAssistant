@@ -12,7 +12,6 @@ public sealed class SelectedFilesTests
 			new FileInfo("cv.pdf"),
 			new FileInfo("letter.pdf"),
 			new FileInfo("letter.txt"),
-			new FileInfo("form-letter.txt"),
 			new FileInfo("portfolio.pdf"));
 
 		var display = selectedFiles.Display();
@@ -20,20 +19,18 @@ public sealed class SelectedFilesTests
 		Assert.Contains("CV: cv.pdf", display);
 		Assert.Contains("Personal letter: letter.pdf", display);
 		Assert.Contains("Personal letter text: letter.txt", display);
-		Assert.Contains("Form personal letter text: form-letter.txt", display);
 		Assert.Contains("Other file: portfolio.pdf", display);
 	}
 
 	[Fact]
-	public void GetPreferredPersonalLetterTextFile_PrefersFormSpecificText()
+	public void GetPreferredPersonalLetterTextFile_ReturnsSelectedTextFile()
 	{
 		var selectedFiles = new SelectedFiles(
-			PersonalLetterTextPath: new FileInfo("default-letter.txt"),
-			PersonalLetterFormTextPath: new FileInfo("form-letter.txt"));
+			PersonalLetterTextPath: new FileInfo("default-letter.txt"));
 
 		var preferredFile = selectedFiles.GetPreferredPersonalLetterTextFile();
 
-		Assert.Equal("form-letter.txt", preferredFile?.Name);
+		Assert.Equal("default-letter.txt", preferredFile?.Name);
 	}
 
 	[Fact]

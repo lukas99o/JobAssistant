@@ -29,14 +29,11 @@ internal static class DocumentSelector
         var letterText = PrepareSelectedCopy(
             PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "PersonalLettersText"))), "personal letter text (.txt)"),
             "PersonalLettersText.Copies");
-        var formLetterText = PrepareSelectedCopy(
-            PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "PersonalLettersText"))), "form personal letter text (.txt)"),
-            "PersonalLettersText.Copies");
         var other = PrepareSelectedCopy(
             PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "Other"))), "other file"),
             "Other.Copies");
 
-        var selected = new SelectedFiles(cv, letter, letterText, formLetterText, other);
+        var selected = new SelectedFiles(cv, letter, letterText, other);
 
         CliConsole.WriteLine($"\nSelected files:\n{selected.Display()}");
         return selected;
