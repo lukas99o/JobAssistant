@@ -10,9 +10,11 @@ data/job_history.json
 documents/CVs/*
 documents/PersonalLetters/*
 documents/Other/*
+documents/PersonalLettersText/*
 !documents/CVs/.gitkeep
 !documents/PersonalLetters/.gitkeep
 !documents/Other/.gitkeep
+!documents/PersonalLettersText/.gitkeep
 
 # Personal profile data
 config/profile.yaml
