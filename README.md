@@ -45,7 +45,7 @@ Open `config\profile.yaml` and fill in your name, email, phone, and any other de
 Place your files in the relevant folders:
 - `documents\CVs\` — your CV
 - `documents\PersonalLetters\` — your uploadable personal letter, typically PDF
-- `documents\PersonalLettersText\` — your plain-text personal letter for textarea-based forms
+- `documents\PersonalLettersText\` — your plain-text personal letter files for textarea-based forms
 - `documents\Other\` — any other attachments
 
 **4. Create job_history.json**
@@ -65,12 +65,13 @@ dotnet run --project .\JobAssistant.Console\JobAssistant.Console.csproj
 ```
 
 The current .NET console flow will:
-1. Select which CV, personal letter, and other files to use
+1. Select which CV, personal letter, personal-letter text files, and other files to use
 2. Prompt for search terms
 3. Fetch JobTech results page by page
 4. Filter out already processed jobs
-5. Open external applications in Playwright, fill simple forms, and route uploads
-6. Fall back to manual review for email applications and more complex forms
+5. Open a temporary editor window for personal-letter text before textarea autofill or text-file uploads
+6. Open external applications in Playwright, fill simple forms, and route uploads
+7. Fall back to manual review for email applications and more complex forms
 
 ## Testing
 

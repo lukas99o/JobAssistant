@@ -1,10 +1,13 @@
 using JobAssistant.Core.Models;
+using JobAssistant.Core.Services;
 using CliConsole = System.Console;
 
 namespace JobAssistant.ConsoleApp;
 
 internal static class DocumentSelector
 {
+    private static readonly DocumentCopyService CopyService = new();
+
     private static readonly HashSet<string> IgnoredFiles = new(StringComparer.OrdinalIgnoreCase)
     {
         ".gitkeep",
@@ -17,15 +20,31 @@ internal static class DocumentSelector
     {
         CliConsole.WriteLine("\n=== Document Selection ===");
 
-        var cv = PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "CVs"))), "CV");
-        var letter = PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "PersonalLetters"))), "personal letter (PDF)");
-        var letterText = PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "PersonalLettersText"))), "personal letter text (.txt)");
-        var other = PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "Other"))), "other file");
+        var cv = PrepareSelectedCopy(
+            PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "CVs"))), "CV"),
+            "CV.Copies");
+        var letter = PrepareSelectedCopy(
+            PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "PersonalLetters"))), "personal letter (PDF)"),
+            "PersonalLetters.Copies");
+        var letterText = PrepareSelectedCopy(
+            PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "PersonalLettersText"))), "personal letter text (.txt)"),
+            "PersonalLettersText.Copies");
+        var formLetterText = PrepareSelectedCopy(
+            PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "PersonalLettersText"))), "form personal letter text (.txt)"),
+            "PersonalLettersText.Copies");
+        var other = PrepareSelectedCopy(
+            PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "Other"))), "other file"),
+            "Other.Copies");
 
-        var selected = new SelectedFiles(cv, letter, letterText, other);
+        var selected = new SelectedFiles(cv, letter, letterText, formLetterText, other);
 
         CliConsole.WriteLine($"\nSelected files:\n{selected.Display()}");
         return selected;
+    }
+
+    private static FileInfo? PrepareSelectedCopy(FileInfo? selectedFile, string copiesFolderName)
+    {
+        return CopyService.GetOrCreateCopy(selectedFile, copiesFolderName);
     }
 
     private static List<FileInfo> ListFiles(DirectoryInfo folder)

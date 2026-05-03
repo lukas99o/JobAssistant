@@ -222,8 +222,20 @@ internal static class Program
 		}
 		else if (job.ApplicationMethod == "email" && !string.IsNullOrWhiteSpace(job.ApplicationEmail))
 		{
+			var postingUrl = $"https://arbetsformedlingen.se/platsbanken/annonser/{job.Id}";
+
 			CliConsole.WriteLine($"  Email application: {job.ApplicationEmail}");
-			CliConsole.WriteLine($"  Job posting: https://arbetsformedlingen.se/platsbanken/annonser/{job.Id}");
+			CliConsole.WriteLine($"  Job posting: {postingUrl}");
+
+			try
+			{
+				await browser.NavigateAsync(postingUrl);
+				CliConsole.WriteLine("  Opened job posting for manual review.");
+			}
+			catch (Exception exception)
+			{
+				CliConsole.WriteLine($"  Could not open job posting: {exception.Message}");
+			}
 
 			if (!string.IsNullOrWhiteSpace(job.ApplicationInfo))
 			{

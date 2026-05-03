@@ -1,5 +1,8 @@
+using System.Diagnostics;
+using System.Net;
 using System.Text.RegularExpressions;
 using JobAssistant.Core.Models;
+using JobAssistant.Core.Services;
 using Microsoft.Playwright;
 using CliConsole = System.Console;
 
@@ -31,6 +34,14 @@ public sealed record FormAnalysis(
 
 public sealed class FormAutomationService
 {
+    private sealed record PreparedPersonalLetter(
+        string Text,
+        FileInfo? EditableTextFile,
+        FileInfo? EditablePdfFile)
+    {
+        public static readonly PreparedPersonalLetter Empty = new(string.Empty, null, null);
+    }
+
     private static readonly HashSet<string> IgnoredInputTypes = new(StringComparer.OrdinalIgnoreCase)
     {
         "hidden",
@@ -248,13 +259,14 @@ public sealed class FormAutomationService
             CliConsole.WriteLine($"  Complex form detected: {analysis.Reason}. Attempting partial autofill.");
         }
 
+        var preparedPersonalLetter = await PreparePersonalLetterAsync(page, analysis, selectedFiles, cancellationToken);
         var filledCount = 0;
 
         foreach (var field in analysis.Fields)
         {
             if (field.IsFileUpload)
             {
-                if (await TryAttachFileAsync(page, field, selectedFiles))
+                if (await TryAttachFileAsync(page, field, selectedFiles, preparedPersonalLetter))
                 {
                     filledCount++;
                 }
@@ -264,7 +276,7 @@ public sealed class FormAutomationService
 
             if (field.Tag == "textarea" && IsPersonalLetterTextarea(field))
             {
-                var letterText = ReadPersonalLetterText(selectedFiles);
+                var letterText = preparedPersonalLetter.Text;
                 if (!string.IsNullOrWhiteSpace(letterText) && await TryFillAsync(field, letterText))
                 {
                     CliConsole.WriteLine($"    Filled personal letter text for '{DisplayName(field)}'");
@@ -435,20 +447,31 @@ public sealed class FormAutomationService
         return LetterKeywords.Any(keyword => searchText.Contains(keyword, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string ReadPersonalLetterText(SelectedFiles selectedFiles)
+    private static async Task<PreparedPersonalLetter> PreparePersonalLetterAsync(
+        IPage page,
+        FormAnalysis analysis,
+        SelectedFiles selectedFiles,
+        CancellationToken cancellationToken)
     {
-        var preferredTextFile = selectedFiles.PersonalLetterTextPath;
-        if (preferredTextFile is not null)
+        if (!NeedsEditablePersonalLetter(analysis))
         {
-            return TryReadTextFile(preferredTextFile);
+            return PreparedPersonalLetter.Empty;
         }
 
-        if (selectedFiles.PersonalLetterPath is not null && selectedFiles.PersonalLetterPath.Extension.Equals(".txt", StringComparison.OrdinalIgnoreCase))
+        var editableTextSource = PersonalLetterFileResolver.GetEditableTextSource(selectedFiles);
+        if (editableTextSource is null)
         {
-            return TryReadTextFile(selectedFiles.PersonalLetterPath);
+            CliConsole.WriteLine("  No personal letter text file is available for editing.");
+            return PreparedPersonalLetter.Empty;
         }
 
-        return string.Empty;
+        var editableDraft = CreateEditableDraft(editableTextSource);
+        CliConsole.WriteLine("  Opening personal letter editor. Save and close the window to continue...");
+        await OpenEditorAsync(editableDraft, cancellationToken);
+        var tailoredText = TryReadTextFile(editableDraft);
+        var editablePdfCopy = await CreateEditablePdfCopyAsync(page, selectedFiles.PersonalLetterPath, editableDraft, tailoredText);
+
+        return new PreparedPersonalLetter(tailoredText, editableDraft, editablePdfCopy);
     }
 
     private static string TryReadTextFile(FileInfo path)
@@ -461,6 +484,148 @@ public sealed class FormAutomationService
         {
             return string.Empty;
         }
+    }
+
+    private static bool NeedsEditablePersonalLetter(FormAnalysis analysis)
+    {
+        return analysis.Fields.Any(field => field.Tag == "textarea" && IsPersonalLetterTextarea(field))
+            || analysis.Fields.Any(field => field.IsFileUpload && MatchFileUpload(field) == "letter");
+    }
+
+    private static FileInfo CreateEditableDraft(FileInfo sourceFile)
+    {
+        var draftsDirectory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "JobAssistant", "PersonalLetterDrafts"));
+        var baseName = string.Concat(Path.GetFileNameWithoutExtension(sourceFile.Name)
+            .Select(character => Path.GetInvalidFileNameChars().Contains(character) ? '_' : character));
+        var draftPath = Path.Combine(
+            draftsDirectory.FullName,
+            $"{baseName}_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.txt");
+
+        File.Copy(sourceFile.FullName, draftPath, overwrite: true);
+        return new FileInfo(draftPath);
+    }
+
+    private static async Task OpenEditorAsync(FileInfo editableDraft, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = OperatingSystem.IsWindows() ? "notepad.exe" : editableDraft.FullName,
+                Arguments = OperatingSystem.IsWindows() ? $"\"{editableDraft.FullName}\"" : string.Empty,
+                UseShellExecute = true,
+            });
+
+            if (process is null)
+            {
+                return;
+            }
+
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            CliConsole.WriteLine($"  Could not open the personal letter editor automatically: {exception.Message}");
+        }
+    }
+
+    private static async Task<FileInfo?> CreateEditablePdfCopyAsync(
+        IPage page,
+        FileInfo? copiedPersonalLetterPdf,
+        FileInfo editableTextDraft,
+        string tailoredText)
+    {
+        if (string.IsNullOrWhiteSpace(tailoredText))
+        {
+            return null;
+        }
+
+        var pdfPath = CreateEditablePdfPath(copiedPersonalLetterPdf, editableTextDraft);
+
+        try
+        {
+            if (copiedPersonalLetterPdf?.Exists == true)
+            {
+                File.Copy(copiedPersonalLetterPdf.FullName, pdfPath.FullName, overwrite: true);
+            }
+
+            var pdfPage = await page.Context.NewPageAsync();
+            try
+            {
+                await pdfPage.EmulateMediaAsync(new PageEmulateMediaOptions
+                {
+                    Media = Media.Screen,
+                });
+
+                await pdfPage.SetContentAsync(BuildPersonalLetterHtml(tailoredText));
+                await pdfPage.PdfAsync(new PagePdfOptions
+                {
+                    Path = pdfPath.FullName,
+                    Format = "A4",
+                    PrintBackground = true,
+                });
+            }
+            finally
+            {
+                await pdfPage.CloseAsync();
+            }
+
+            CliConsole.WriteLine($"  Prepared tailored PDF copy: {pdfPath.Name}");
+            return pdfPath;
+        }
+        catch (Exception exception)
+        {
+            CliConsole.WriteLine($"  Could not generate a tailored PDF copy: {exception.Message}");
+            return null;
+        }
+    }
+
+    private static FileInfo CreateEditablePdfPath(FileInfo? copiedPersonalLetterPdf, FileInfo editableTextDraft)
+    {
+        if (copiedPersonalLetterPdf?.Directory is not null)
+        {
+            var copyDirectory = copiedPersonalLetterPdf.Directory;
+            var pdfPath = Path.Combine(
+                copyDirectory.FullName,
+                $"{Path.GetFileNameWithoutExtension(copiedPersonalLetterPdf.Name)}_tailored_{Guid.NewGuid():N}.pdf");
+
+            return new FileInfo(pdfPath);
+        }
+
+        var draftsDirectory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "JobAssistant", "PersonalLetterDrafts"));
+        var fallbackPath = Path.Combine(
+            draftsDirectory.FullName,
+            $"{Path.GetFileNameWithoutExtension(editableTextDraft.Name)}_{Guid.NewGuid():N}.pdf");
+
+        return new FileInfo(fallbackPath);
+    }
+
+    private static string BuildPersonalLetterHtml(string tailoredText)
+    {
+        var encodedText = WebUtility.HtmlEncode(tailoredText);
+
+        return $$"""
+        <!DOCTYPE html>
+        <html lang="sv">
+        <head>
+            <meta charset="utf-8">
+            <style>
+                @page {
+                    margin: 18mm;
+                }
+
+                body {
+                    color: #111827;
+                    font-family: "Segoe UI", Calibri, sans-serif;
+                    font-size: 12pt;
+                    line-height: 1.5;
+                    white-space: pre-wrap;
+                }
+            </style>
+        </head>
+        <body>{{encodedText}}</body>
+        </html>
+        """;
     }
 
     private static string? MatchFormAnswer(FormField field, UserProfile profile)
@@ -510,13 +675,30 @@ public sealed class FormAutomationService
         return null;
     }
 
-    private static async Task<bool> TryAttachFileAsync(IPage page, FormField field, SelectedFiles selectedFiles)
+    private static async Task<bool> TryAttachFileAsync(
+        IPage page,
+        FormField field,
+        SelectedFiles selectedFiles,
+        PreparedPersonalLetter preparedPersonalLetter)
     {
         var uploadType = MatchFileUpload(field);
+
+        var uploadLocator = await ResolveFileInputLocatorAsync(page, field);
+        if (uploadLocator is null)
+        {
+            CliConsole.WriteLine($"    Could not locate a valid file input for '{DisplayName(field)}'.");
+            return false;
+        }
+
+        var acceptAttribute = await uploadLocator.GetAttributeAsync("accept");
         FileInfo? fileToUpload = uploadType switch
         {
             "cv" when selectedFiles.CvPath?.Exists == true => selectedFiles.CvPath,
-            "letter" when selectedFiles.PersonalLetterPath?.Exists == true => selectedFiles.PersonalLetterPath,
+            "letter" => PersonalLetterFileResolver.GetPreferredUploadFile(
+                selectedFiles,
+                preparedPersonalLetter.EditableTextFile,
+                preparedPersonalLetter.EditablePdfFile,
+                acceptAttribute),
             "other" when selectedFiles.OtherPath?.Exists == true => selectedFiles.OtherPath,
             _ when selectedFiles.CvPath?.Exists == true => selectedFiles.CvPath,
             _ => null,
@@ -527,11 +709,12 @@ public sealed class FormAutomationService
             return false;
         }
 
-        var uploadLocator = await ResolveFileInputLocatorAsync(page, field);
-        if (uploadLocator is null)
+        if (uploadType == "letter"
+            && preparedPersonalLetter.EditablePdfFile is null
+            && preparedPersonalLetter.EditableTextFile is not null
+            && !PersonalLetterFileResolver.AcceptsPlainText(acceptAttribute))
         {
-            CliConsole.WriteLine($"    Could not locate a valid file input for '{DisplayName(field)}'.");
-            return false;
+            CliConsole.WriteLine("    Keeping the copied original personal letter because a tailored PDF was not available for this upload.");
         }
 
         try
