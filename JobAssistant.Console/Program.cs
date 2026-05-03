@@ -1,4 +1,5 @@
-﻿using JobAssistant.Core.Configuration;
+﻿using JobAssistant.Browser;
+using JobAssistant.Core.Configuration;
 using JobAssistant.Core.Models;
 using JobAssistant.Core.Services;
 using CliConsole = System.Console;
@@ -12,6 +13,23 @@ internal static class Program
 	private static readonly DirectoryInfo DataDirectory = new(Path.Combine(RepositoryRoot.FullName, "data"));
 	private static readonly DirectoryInfo DocumentsDirectory = new(Path.Combine(RepositoryRoot.FullName, "documents"));
 
+	private sealed class SessionStats
+	{
+		public int Processed { get; set; }
+		public int Applied { get; set; }
+		public int Skipped { get; set; }
+		public int Manual { get; set; }
+
+		public void Display()
+		{
+			CliConsole.WriteLine("\n=== Session Summary ===");
+			CliConsole.WriteLine($"  Processed: {Processed}");
+			CliConsole.WriteLine($"  Applied (form filled): {Applied}");
+			CliConsole.WriteLine($"  Manual (email/complex form): {Manual}");
+			CliConsole.WriteLine($"  Skipped: {Skipped}");
+		}
+	}
+
 	private static async Task<int> Main()
 	{
 		CliConsole.WriteLine(new string('=', 50));
@@ -22,6 +40,7 @@ internal static class Program
 		var settings = LoadSettings();
 		var profile = LoadProfile();
 		var history = new JobHistoryStore(new FileInfo(Path.Combine(DataDirectory.FullName, "job_history.json")));
+		var stats = new SessionStats();
 
 		CliConsole.WriteLine($"\nAuto-submit: {(settings.AutoSubmit ? "ON" : "OFF")}");
 
@@ -29,44 +48,65 @@ internal static class Program
 		var query = PromptSearchQuery();
 
 		using var apiClient = new JobSearchClient(settings);
-		var results = await apiClient.SearchAsync(query);
-		var (newJobs, skippedCount) = history.FilterNew(results.Jobs);
+		await using var browser = new BrowserManager(settings);
+		var formAutomation = new FormAutomationService();
 
-		CliConsole.WriteLine($"\nFound {results.Jobs.Count} jobs ({newJobs.Count} new, {skippedCount} already processed)");
+		await browser.StartAsync();
 
-		if (newJobs.Count == 0)
+		try
 		{
-			CliConsole.WriteLine("All jobs on the first page were already processed.");
-			return 0;
+			var offset = 0;
+
+			while (true)
+			{
+				CliConsole.WriteLine($"\nSearching: '{query}' (offset {offset})...");
+				var results = await apiClient.SearchAsync(query, offset);
+
+				if (results.Jobs.Count == 0)
+				{
+					CliConsole.WriteLine("No jobs found.");
+					var noResultChoice = EndOfPageMenu(hasMore: false);
+					ApplyMenuChoice(noResultChoice, false, settings, ref selectedFiles, ref query, ref offset);
+					continue;
+				}
+
+				var (newJobs, skippedCount) = history.FilterNew(results.Jobs);
+				CliConsole.WriteLine($"Found {results.Jobs.Count} jobs ({newJobs.Count} new, {skippedCount} already processed)");
+
+				if (newJobs.Count == 0)
+				{
+					CliConsole.WriteLine("All jobs on this page were already processed.");
+					var hasMoreWithoutProcessing = offset + settings.ApiBatchSize < results.Total;
+					var emptyChoice = EndOfPageMenu(hasMoreWithoutProcessing);
+					ApplyMenuChoice(emptyChoice, hasMoreWithoutProcessing, settings, ref selectedFiles, ref query, ref offset);
+					continue;
+				}
+
+				for (var index = 0; index < newJobs.Count; index++)
+				{
+					await ProcessJobAsync(
+						newJobs[index],
+						index + 1,
+						newJobs.Count,
+						browser,
+						formAutomation,
+						profile,
+						selectedFiles,
+						settings,
+						history,
+						query,
+						stats);
+				}
+
+				var hasMore = offset + settings.ApiBatchSize < results.Total;
+				var choice = EndOfPageMenu(hasMore);
+				ApplyMenuChoice(choice, hasMore, settings, ref selectedFiles, ref query, ref offset);
+			}
 		}
-
-		CliConsole.WriteLine("\nNew jobs on the first page:");
-
-		for (var index = 0; index < newJobs.Count; index++)
+		finally
 		{
-			var job = newJobs[index];
-			var city = string.IsNullOrWhiteSpace(job.WorkplaceCity) ? "Unknown location" : job.WorkplaceCity;
-
-			CliConsole.WriteLine($"\n[{index + 1}/{newJobs.Count}] {job.Headline}");
-			CliConsole.WriteLine($"  Employer: {job.EmployerName} - {city}");
-			CliConsole.WriteLine($"  Method: {job.ApplicationMethod}");
-
-			if (!string.IsNullOrWhiteSpace(job.ApplicationUrl))
-			{
-				CliConsole.WriteLine($"  URL: {job.ApplicationUrl}");
-			}
-
-			if (!string.IsNullOrWhiteSpace(job.ApplicationEmail))
-			{
-				CliConsole.WriteLine($"  Email: {job.ApplicationEmail}");
-			}
+			stats.Display();
 		}
-
-		CliConsole.WriteLine("\nSelected files:");
-		CliConsole.WriteLine(selectedFiles.Display());
-		CliConsole.WriteLine("\nCurrent status: browser automation and form filling are still being ported in the .NET app.");
-
-		return 0;
 	}
 
 	private static Settings LoadSettings()
@@ -113,6 +153,193 @@ internal static class Program
 
 			CliConsole.WriteLine("Search terms cannot be empty.");
 		}
+	}
+
+	private static async Task ProcessJobAsync(
+		JobListing job,
+		int index,
+		int total,
+		BrowserManager browser,
+		FormAutomationService formAutomation,
+		UserProfile profile,
+		SelectedFiles selectedFiles,
+		Settings settings,
+		JobHistoryStore history,
+		string query,
+		SessionStats stats)
+	{
+		var city = string.IsNullOrWhiteSpace(job.WorkplaceCity) ? "Unknown location" : job.WorkplaceCity;
+		CliConsole.WriteLine($"\n[{index}/{total}] {job.Headline}");
+		CliConsole.WriteLine($"  Employer: {job.EmployerName} - {city}");
+
+		if (job.ApplicationMethod == "external" && !string.IsNullOrWhiteSpace(job.ApplicationUrl))
+		{
+			CliConsole.WriteLine($"  Application URL: {job.ApplicationUrl}");
+
+			try
+			{
+				var page = await browser.NavigateAsync(job.ApplicationUrl);
+				var analysis = await formAutomation.AnalyzePageAsync(page, settings);
+
+				if (analysis.Fields.Count == 0 && await browser.TryClickApplyButtonAsync())
+				{
+					analysis = await formAutomation.AnalyzePageAsync(browser.Page, settings);
+				}
+
+				if (analysis.Fields.Count == 0)
+				{
+					CliConsole.WriteLine($"  {analysis.Reason}");
+					PromptForManualCompletion("  Complete the application manually, then press Enter to continue...");
+					history.Record(job, "manual", query);
+					stats.Manual++;
+				}
+				else if (analysis.IsSimple)
+				{
+					await formAutomation.FillFormAsync(browser.Page, analysis, profile, selectedFiles, settings);
+
+					if (!settings.AutoSubmit)
+					{
+						PromptForManualCompletion("  Press Enter when done to continue...");
+					}
+
+					history.Record(job, "applied", query);
+					stats.Applied++;
+				}
+				else
+				{
+					CliConsole.WriteLine($"  {analysis.Reason}");
+					await formAutomation.FillFormAsync(browser.Page, analysis, profile, selectedFiles, settings, forceManual: true);
+					PromptForManualCompletion("  Complete any remaining fields and submit manually, then press Enter to continue...");
+					history.Record(job, "manual", query);
+					stats.Manual++;
+				}
+			}
+			catch (Exception exception)
+			{
+				CliConsole.WriteLine($"  Error navigating to application: {exception.Message}");
+				stats.Skipped++;
+			}
+		}
+		else if (job.ApplicationMethod == "email" && !string.IsNullOrWhiteSpace(job.ApplicationEmail))
+		{
+			CliConsole.WriteLine($"  Email application: {job.ApplicationEmail}");
+			CliConsole.WriteLine($"  Job posting: https://arbetsformedlingen.se/platsbanken/annonser/{job.Id}");
+
+			if (!string.IsNullOrWhiteSpace(job.ApplicationInfo))
+			{
+				CliConsole.WriteLine($"  Instructions: {job.ApplicationInfo}");
+			}
+
+			PromptForManualCompletion("  Complete the application manually, then press Enter to continue...");
+			history.Record(job, "manual", query);
+			stats.Manual++;
+		}
+		else
+		{
+			CliConsole.WriteLine("  No application method found. Skipping.");
+
+			if (!string.IsNullOrWhiteSpace(job.ApplicationInfo))
+			{
+				CliConsole.WriteLine($"  Info: {job.ApplicationInfo}");
+			}
+
+			stats.Skipped++;
+		}
+
+		stats.Processed++;
+
+		if (settings.ActionDelay > 0)
+		{
+			await Task.Delay(TimeSpan.FromSeconds(settings.ActionDelay));
+		}
+	}
+
+	private static string EndOfPageMenu(bool hasMore)
+	{
+		CliConsole.WriteLine("\n=== Page Complete ===");
+		CliConsole.WriteLine("What would you like to do?");
+
+		HashSet<string> validChoices;
+		if (hasMore)
+		{
+			CliConsole.WriteLine("  1. Continue to next page");
+			CliConsole.WriteLine("  2. Select new files and continue to next page");
+			CliConsole.WriteLine("  3. Select new files and start a new job search");
+			CliConsole.WriteLine("  4. Start a new job search (keep current files)");
+			validChoices = new HashSet<string>(StringComparer.Ordinal) { "1", "2", "3", "4" };
+		}
+		else
+		{
+			CliConsole.WriteLine("  No more results for this search.");
+			CliConsole.WriteLine("  1. Select new files and start a new job search");
+			CliConsole.WriteLine("  2. Start a new job search (keep current files)");
+			validChoices = new HashSet<string>(StringComparer.Ordinal) { "1", "2" };
+		}
+
+		while (true)
+		{
+			CliConsole.Write($"Choice [{string.Join('/', validChoices.OrderBy(value => value, StringComparer.Ordinal))}]: ");
+			var choice = CliConsole.ReadLine()?.Trim() ?? string.Empty;
+			if (validChoices.Contains(choice))
+			{
+				return choice;
+			}
+
+			CliConsole.WriteLine($"Invalid choice. Enter {string.Join(" or ", validChoices.OrderBy(value => value, StringComparer.Ordinal))}.");
+		}
+	}
+
+	private static void ApplyMenuChoice(
+		string choice,
+		bool hasMore,
+		Settings settings,
+		ref SelectedFiles selectedFiles,
+		ref string query,
+		ref int offset)
+	{
+		if (hasMore)
+		{
+			switch (choice)
+			{
+				case "1":
+					offset += settings.ApiBatchSize;
+					break;
+				case "2":
+					selectedFiles = DocumentSelector.SelectFiles(DocumentsDirectory);
+					offset += settings.ApiBatchSize;
+					break;
+				case "3":
+					selectedFiles = DocumentSelector.SelectFiles(DocumentsDirectory);
+					query = PromptSearchQuery();
+					offset = 0;
+					break;
+				case "4":
+					query = PromptSearchQuery();
+					offset = 0;
+					break;
+			}
+
+			return;
+		}
+
+		switch (choice)
+		{
+			case "1":
+				selectedFiles = DocumentSelector.SelectFiles(DocumentsDirectory);
+				query = PromptSearchQuery();
+				offset = 0;
+				break;
+			case "2":
+				query = PromptSearchQuery();
+				offset = 0;
+				break;
+		}
+	}
+
+	private static void PromptForManualCompletion(string prompt)
+	{
+		CliConsole.Write(prompt);
+		CliConsole.ReadLine();
 	}
 
 	private static DirectoryInfo FindRepositoryRoot()

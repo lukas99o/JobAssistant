@@ -1,5 +1,6 @@
 using JobAssistant.Core.Models;
 using Microsoft.Playwright;
+using PlaywrightProgram = Microsoft.Playwright.Program;
 
 namespace JobAssistant.Browser;
 
@@ -61,11 +62,7 @@ public sealed class BrowserManager : IAsyncDisposable
         }
 
         _playwright = await Playwright.CreateAsync();
-        _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
-        {
-            Headless = _settings.BrowserHeadless,
-            SlowMo = _settings.BrowserSlowMo,
-        });
+        _browser = await LaunchBrowserAsync();
         _page = await _browser.NewPageAsync();
         Console.WriteLine("  Browser started.");
     }
@@ -214,6 +211,44 @@ public sealed class BrowserManager : IAsyncDisposable
         catch
         {
             return false;
+        }
+    }
+
+    private async Task<IBrowser> LaunchBrowserAsync()
+    {
+        try
+        {
+            return await _playwright!.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+            {
+                Headless = _settings.BrowserHeadless,
+                SlowMo = _settings.BrowserSlowMo,
+            });
+        }
+        catch (PlaywrightException exception) when (IsMissingBrowserExecutable(exception))
+        {
+            Console.WriteLine("  Playwright browser not installed. Installing Chromium...");
+            await InstallChromiumAsync();
+
+            return await _playwright!.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+            {
+                Headless = _settings.BrowserHeadless,
+                SlowMo = _settings.BrowserSlowMo,
+            });
+        }
+    }
+
+    private static bool IsMissingBrowserExecutable(PlaywrightException exception)
+    {
+        return exception.Message.Contains("Executable doesn't exist", StringComparison.OrdinalIgnoreCase)
+            || exception.Message.Contains("ms-playwright", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static async Task InstallChromiumAsync()
+    {
+        var exitCode = await Task.Run(() => PlaywrightProgram.Main(new[] { "install", "chromium" }));
+        if (exitCode != 0)
+        {
+            throw new InvalidOperationException($"Playwright browser installation failed with exit code {exitCode}.");
         }
     }
 }

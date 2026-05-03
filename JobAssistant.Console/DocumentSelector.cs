@@ -18,10 +18,11 @@ internal static class DocumentSelector
         CliConsole.WriteLine("\n=== Document Selection ===");
 
         var cv = PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "CVs"))), "CV");
-        var letter = PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "PersonalLetters"))), "personal letter");
+        var letter = PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "PersonalLetters"))), "personal letter (PDF)");
+        var letterText = PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "PersonalLettersText"))), "personal letter text (.txt)");
         var other = PickOne(ListFiles(new DirectoryInfo(Path.Combine(documentsDirectory.FullName, "Other"))), "other file");
 
-        var selected = new SelectedFiles(cv, letter, other);
+        var selected = new SelectedFiles(cv, letter, letterText, other);
 
         CliConsole.WriteLine($"\nSelected files:\n{selected.Display()}");
         return selected;

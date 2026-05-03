@@ -11,13 +11,13 @@ Implemented today:
 - Interactive document selection
 - JobTech API search
 - Job history persistence and deduplication
-- Playwright-based browser manager foundation
-- Root solution, test project, and PowerShell launcher
+- Page-by-page browser application flow
+- Form analysis, simple-field autofill, and file upload routing
+- Root solution, test project, PowerShell launcher, and launcher smoke test
 
-Still being ported:
-- Form analysis and auto-fill heuristics
-- File-upload routing
-- End-to-end browser application flow
+Still evolving:
+- Site-specific form heuristics beyond the generic simple-form flow
+- Additional edge-case handling for non-standard application pages
 
 ## Requirements
 
@@ -44,7 +44,8 @@ Open `config\profile.yaml` and fill in your name, email, phone, and any other de
 
 Place your files in the relevant folders:
 - `documents\CVs\` — your CV
-- `documents\PersonalLetters\` — your personal letter
+- `documents\PersonalLetters\` — your uploadable personal letter, typically PDF
+- `documents\PersonalLettersText\` — your plain-text personal letter for textarea-based forms
 - `documents\Other\` — any other attachments
 
 **4. Create job_history.json**
@@ -66,8 +67,10 @@ dotnet run --project .\JobAssistant.Console\JobAssistant.Console.csproj
 The current .NET console flow will:
 1. Select which CV, personal letter, and other files to use
 2. Prompt for search terms
-3. Fetch the first JobTech results page
-4. Filter out already processed jobs and show the new ones
+3. Fetch JobTech results page by page
+4. Filter out already processed jobs
+5. Open external applications in Playwright, fill simple forms, and route uploads
+6. Fall back to manual review for email applications and more complex forms
 
 ## Testing
 
@@ -81,12 +84,12 @@ Open `config\settings.yaml` to adjust behaviour:
 
 | Setting | Default | Description |
 |---|---|---|
-| `auto_submit` | `false` | Reserved for the form-submission port |
+| `auto_submit` | `false` | Submit simple forms automatically after autofill |
 | `auto_accept_cookies` | `true` | Used by the browser layer |
 | `action_delay` | `1.5` | Delay between browser actions |
 | `browser_slow_mo` | `500` | Milliseconds between Playwright actions |
 | `api_batch_size` | `25` | Number of jobs to fetch per page |
-| `max_simple_form_fields` | `10` | Reserved for the form-analysis port |
+| `max_simple_form_fields` | `10` | Forms above this field count fall back to manual review |
 
 ## Job History
 
