@@ -231,6 +231,7 @@ internal static class Program
 			{
 				await browser.NavigateAsync(postingUrl);
 				CliConsole.WriteLine("  Opened job posting for manual review.");
+				await formAutomation.PreparePersonalLetterForManualApplicationAsync(browser.Page, selectedFiles);
 			}
 			catch (Exception exception)
 			{

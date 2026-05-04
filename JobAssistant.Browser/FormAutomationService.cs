@@ -260,6 +260,7 @@ public sealed class FormAutomationService
         }
 
         var preparedPersonalLetter = await PreparePersonalLetterAsync(page, analysis, selectedFiles, cancellationToken);
+        ReportPreparedPersonalLetter(preparedPersonalLetter);
         var filledCount = 0;
 
         foreach (var field in analysis.Fields)
@@ -339,6 +340,15 @@ public sealed class FormAutomationService
         }
 
         return true;
+    }
+
+    public async Task PreparePersonalLetterForManualApplicationAsync(
+        IPage page,
+        SelectedFiles selectedFiles,
+        CancellationToken cancellationToken = default)
+    {
+        var preparedPersonalLetter = await PreparePersonalLetterAsync(page, selectedFiles, needsEditableLetter: true, cancellationToken);
+        ReportPreparedPersonalLetter(preparedPersonalLetter);
     }
 
     private static async Task<ILocator?> FindSubmitButtonAsync(ILocator form)
@@ -453,7 +463,16 @@ public sealed class FormAutomationService
         SelectedFiles selectedFiles,
         CancellationToken cancellationToken)
     {
-        if (!NeedsEditablePersonalLetter(analysis))
+        return await PreparePersonalLetterAsync(page, selectedFiles, NeedsEditablePersonalLetter(analysis), cancellationToken);
+    }
+
+    private static async Task<PreparedPersonalLetter> PreparePersonalLetterAsync(
+        IPage page,
+        SelectedFiles selectedFiles,
+        bool needsEditableLetter,
+        CancellationToken cancellationToken)
+    {
+        if (!needsEditableLetter)
         {
             return PreparedPersonalLetter.Empty;
         }
@@ -472,6 +491,19 @@ public sealed class FormAutomationService
         var editablePdfCopy = await CreateEditablePdfCopyAsync(page, selectedFiles.PersonalLetterPath, editableDraft, tailoredText);
 
         return new PreparedPersonalLetter(tailoredText, editableDraft, editablePdfCopy);
+    }
+
+    private static void ReportPreparedPersonalLetter(PreparedPersonalLetter preparedPersonalLetter)
+    {
+        if (preparedPersonalLetter.EditableTextFile is not null)
+        {
+            CliConsole.WriteLine($"  Tailored personal letter text: {preparedPersonalLetter.EditableTextFile.FullName}");
+        }
+
+        if (preparedPersonalLetter.EditablePdfFile is not null)
+        {
+            CliConsole.WriteLine($"  Tailored personal letter PDF: {preparedPersonalLetter.EditablePdfFile.FullName}");
+        }
     }
 
     private static string TryReadTextFile(FileInfo path)
