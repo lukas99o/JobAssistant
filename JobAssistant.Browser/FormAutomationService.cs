@@ -245,6 +245,26 @@ public sealed class FormAutomationService
         return new FormAnalysis(isSimple, fields, hasFileUpload, submitButton, reason);
     }
 
+    public async Task<JobListing> CapturePageApplicationNotesAsync(IPage page, JobListing job)
+    {
+        var pageText = await TryReadPageTextAsync(page);
+        if (string.IsNullOrWhiteSpace(pageText))
+        {
+            return job;
+        }
+
+        var pageInstruction = ApplicationReferenceFormatter.ExtractRelevantInstruction(pageText);
+        if (string.IsNullOrWhiteSpace(pageInstruction))
+        {
+            return job;
+        }
+
+        var mergedApplicationInfo = MergeApplicationInfo(job.ApplicationInfo, pageInstruction);
+        return string.Equals(mergedApplicationInfo, job.ApplicationInfo, StringComparison.Ordinal)
+            ? job
+            : job with { ApplicationInfo = mergedApplicationInfo };
+    }
+
     public async Task<bool> FillFormAsync(
         IPage page,
         FormAnalysis analysis,
@@ -365,6 +385,44 @@ public sealed class FormAutomationService
         }
 
         return null;
+    }
+
+    private static string? MergeApplicationInfo(string? currentInfo, string relevantInstruction)
+    {
+        if (string.IsNullOrWhiteSpace(relevantInstruction))
+        {
+            return currentInfo;
+        }
+
+        if (string.IsNullOrWhiteSpace(currentInfo))
+        {
+            return relevantInstruction;
+        }
+
+        if (currentInfo.Contains(relevantInstruction, StringComparison.OrdinalIgnoreCase))
+        {
+            return currentInfo;
+        }
+
+        return $"{currentInfo.Trim()}{Environment.NewLine}{relevantInstruction}";
+    }
+
+    private static async Task<string> TryReadPageTextAsync(IPage page)
+    {
+        try
+        {
+            var body = page.Locator("body");
+            if (await body.CountAsync() == 0)
+            {
+                return string.Empty;
+            }
+
+            return (await body.First.InnerTextAsync()).Trim();
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     private static string? MatchField(FormField field)
@@ -489,6 +547,7 @@ public sealed class FormAutomationService
         }
 
         var editableDraft = CreateEditableDraft(editableTextSource);
+        InjectApplicationReference(editableDraft, job);
         using var contextViewer = OpenJobContextViewer(job);
         if (contextViewer is not null)
         {
@@ -545,6 +604,23 @@ public sealed class FormAutomationService
 
         File.Copy(sourceFile.FullName, draftPath, overwrite: true);
         return new FileInfo(draftPath);
+    }
+
+    private static void InjectApplicationReference(FileInfo editableDraft, JobListing? job)
+    {
+        try
+        {
+            var originalText = File.ReadAllText(editableDraft.FullName);
+            var updatedText = ApplicationReferenceFormatter.PrependReferenceToPersonalLetter(originalText, job);
+            if (!string.Equals(originalText, updatedText, StringComparison.Ordinal))
+            {
+                File.WriteAllText(editableDraft.FullName, updatedText);
+            }
+        }
+        catch (Exception exception)
+        {
+            CliConsole.WriteLine($"  Could not inject the application reference into the personal letter draft: {exception.Message}");
+        }
     }
 
     private static JobContextViewer? OpenJobContextViewer(JobListing? job)

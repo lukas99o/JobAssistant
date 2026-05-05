@@ -19,6 +19,9 @@ public sealed record JobHistoryRecord
     [JsonPropertyName("company_keywords")]
     public IReadOnlyList<string> CompanyKeywords { get; init; } = Array.Empty<string>();
 
+    [JsonPropertyName("application_reference")]
+    public string ApplicationReference { get; init; } = string.Empty;
+
     [JsonPropertyName("summary")]
     public string Summary { get; init; } = string.Empty;
 

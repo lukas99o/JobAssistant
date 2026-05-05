@@ -21,7 +21,7 @@ public sealed class JobHistoryStoreTests
                 Id = "123",
                 Headline = "Backend Developer",
                 EmployerName = "Acme AB",
-                Description = "Build APIs",
+                Description = "Build APIs. Ange referens teamtailor-7677525-1980472 i din ansokan.",
                 CompanyDesc = "Build APIs and integrations.",
                 CompanyKeywords = new[] { "APIs", "Integrations" },
             };
@@ -41,6 +41,8 @@ public sealed class JobHistoryStoreTests
             Assert.Contains("\"company_name\"", json);
             Assert.Contains("\"company_desc\"", json);
             Assert.Contains("\"company_keywords\"", json);
+            Assert.Contains("\"application_reference\"", json);
+            Assert.Contains("teamtailor-7677525-1980472", json);
             Assert.DoesNotContain("\"company_purpose\"", json);
             Assert.True(store.IsProcessed("123"));
 
@@ -95,6 +97,7 @@ public sealed class JobHistoryStoreTests
             var migratedJson = File.ReadAllText(historyFile.FullName);
             Assert.Contains("\"company_desc\"", migratedJson);
             Assert.Contains("\"company_keywords\": []", migratedJson);
+            Assert.Contains("\"application_reference\": \"\"", migratedJson);
             Assert.DoesNotContain("\"company_purpose\"", migratedJson);
         }
         finally

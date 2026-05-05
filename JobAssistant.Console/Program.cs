@@ -208,10 +208,12 @@ internal static class Program
 			try
 			{
 				var page = await browser.NavigateAsync(job.ApplicationUrl);
+				job = await formAutomation.CapturePageApplicationNotesAsync(page, job);
 				var analysis = await formAutomation.AnalyzePageAsync(page, settings);
 
 				if (analysis.Fields.Count == 0 && await browser.TryClickApplyButtonAsync())
 				{
+					job = await formAutomation.CapturePageApplicationNotesAsync(browser.Page, job);
 					analysis = await formAutomation.AnalyzePageAsync(browser.Page, settings);
 				}
 
@@ -260,6 +262,7 @@ internal static class Program
 			{
 				await browser.NavigateAsync(postingUrl);
 				CliConsole.WriteLine("  Opened job posting for manual review.");
+				job = await formAutomation.CapturePageApplicationNotesAsync(browser.Page, job);
 				await formAutomation.PreparePersonalLetterForManualApplicationAsync(browser.Page, selectedFiles, job);
 			}
 			catch (Exception exception)
@@ -302,10 +305,18 @@ internal static class Program
 		JobDescriptionEnricher descriptionEnricher)
 	{
 		var detailedJob = await apiClient.GetAdAsync(job.Id) ?? job;
-		if (string.IsNullOrWhiteSpace(detailedJob.Description) && !string.IsNullOrWhiteSpace(job.Description))
+		detailedJob = detailedJob with
 		{
-			detailedJob = detailedJob with { Description = job.Description };
-		}
+			Headline = string.IsNullOrWhiteSpace(detailedJob.Headline) ? job.Headline : detailedJob.Headline,
+			EmployerName = string.IsNullOrWhiteSpace(detailedJob.EmployerName) ? job.EmployerName : detailedJob.EmployerName,
+			Description = string.IsNullOrWhiteSpace(detailedJob.Description) ? job.Description : detailedJob.Description,
+			ApplicationUrl = string.IsNullOrWhiteSpace(detailedJob.ApplicationUrl) ? job.ApplicationUrl : detailedJob.ApplicationUrl,
+			ApplicationEmail = string.IsNullOrWhiteSpace(detailedJob.ApplicationEmail) ? job.ApplicationEmail : detailedJob.ApplicationEmail,
+			ApplicationInfo = string.IsNullOrWhiteSpace(detailedJob.ApplicationInfo) ? job.ApplicationInfo : detailedJob.ApplicationInfo,
+			WorkplaceCity = string.IsNullOrWhiteSpace(detailedJob.WorkplaceCity) ? job.WorkplaceCity : detailedJob.WorkplaceCity,
+			PublishedDate = string.IsNullOrWhiteSpace(detailedJob.PublishedDate) ? job.PublishedDate : detailedJob.PublishedDate,
+			LastApplyDate = string.IsNullOrWhiteSpace(detailedJob.LastApplyDate) ? job.LastApplyDate : detailedJob.LastApplyDate,
+		};
 
 		var analysis = await descriptionEnricher.AnalyzeAsync(detailedJob.Description);
 		if (!string.IsNullOrWhiteSpace(analysis.WarningMessage))

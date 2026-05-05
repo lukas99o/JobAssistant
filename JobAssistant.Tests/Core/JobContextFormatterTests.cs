@@ -12,10 +12,12 @@ public sealed class JobContextFormatterTests
         {
             Headline = "Fullstackutvecklare",
             EmployerName = "Acme AB",
+            Description = "Ange referens teamtailor-7677525-1980472 i ditt personliga brev.",
             WorkplaceCity = "Stockholm",
             CompanyDesc = "Bygg moderna system med fokus på .NET och Azure.",
             CompanyKeywords = [".NET", "Azure", "React"],
             ApplicationUrl = "https://example.com/apply",
+            ApplicationInfo = "Ange referens i ansokan.",
         };
 
         var result = JobContextFormatter.FormatForContextWindow(job);
@@ -25,8 +27,13 @@ public sealed class JobContextFormatterTests
         Assert.Contains("Company: Acme AB", result);
         Assert.Contains("Location: Stockholm", result);
         Assert.Contains("Application URL: https://example.com/apply", result);
+        Assert.Contains("Application Notes:", result);
+        Assert.Contains("Include this reference in your personal letter:", result);
+        Assert.Contains("teamtailor-7677525-1980472", result);
+        Assert.Contains("Ange referens i ansokan.", result);
         Assert.Contains("Summary:", result);
-        Assert.Contains("Bygg moderna system med fokus på .NET och Azure.", result);
+        Assert.Contains("Bygg moderna system med fokus på .NET", result);
+        Assert.Contains("och Azure.", result);
         Assert.Contains("Keywords:", result);
         Assert.Contains("  - .NET", result);
         Assert.Contains("  - Azure", result);

@@ -60,6 +60,9 @@ public static class JobContextFormatter
             AppendField(builder, "Application Email", job.ApplicationEmail);
         }
 
+        var applicationNotes = ApplicationReferenceFormatter.BuildApplicationNotes(job);
+        AppendSection(builder, "Application Notes", WrapText(applicationNotes, SummaryWrapWidth));
+
         AppendSection(builder, "Summary", WrapText(job.CompanyDesc, SummaryWrapWidth));
         AppendKeywordSection(builder, job.CompanyKeywords);
 

@@ -66,6 +66,7 @@ public sealed class JobHistoryStore
             Headline = job.Headline,
             CompanyDesc = job.CompanyDesc,
             CompanyKeywords = job.CompanyKeywords,
+            ApplicationReference = ApplicationReferenceFormatter.ExtractReference(job) ?? string.Empty,
             Summary = job.Summary,
             LastSearchDate = (searchDate ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"),
             SearchQuery = searchQuery,
@@ -137,10 +138,9 @@ public sealed class JobHistoryStore
             {
                 record["company_keywords"] = new JsonArray();
                 migrated = true;
-                continue;
             }
 
-            if (companyKeywordsNode is JsonValue keywordValue)
+            if (record.TryGetPropertyValue("company_keywords", out companyKeywordsNode) && companyKeywordsNode is JsonValue keywordValue)
             {
                 var serializedKeywords = keywordValue.ToJsonString();
                 var parsedKeywords = JsonSerializer.Deserialize<string>(serializedKeywords);
@@ -155,6 +155,12 @@ public sealed class JobHistoryStore
                     record["company_keywords"] = array;
                     migrated = true;
                 }
+            }
+
+            if (!record.ContainsKey("application_reference"))
+            {
+                record["application_reference"] = string.Empty;
+                migrated = true;
             }
         }
 
