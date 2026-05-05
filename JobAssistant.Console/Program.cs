@@ -263,7 +263,7 @@ internal static class Program
 				await browser.NavigateAsync(postingUrl);
 				CliConsole.WriteLine("  Opened job posting for manual review.");
 				job = await formAutomation.CapturePageApplicationNotesAsync(browser.Page, job);
-				await formAutomation.PreparePersonalLetterForManualApplicationAsync(browser.Page, selectedFiles, job);
+				await formAutomation.PreparePersonalLetterForManualApplicationAsync(browser.Page, selectedFiles, settings, job);
 			}
 			catch (Exception exception)
 			{

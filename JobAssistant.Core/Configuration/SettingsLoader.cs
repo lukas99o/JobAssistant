@@ -23,6 +23,7 @@ public sealed class SettingsLoader
         return new JobSettings
         {
             ActionDelay = document.ActionDelay ?? 1.5,
+            PersonalLetterEditorEnabled = document.PersonalLetterEditorEnabled ?? true,
             ApiBatchSize = document.ApiBatchSize ?? 25,
             ApiBaseUrl = document.ApiBaseUrl ?? "https://jobsearch.api.jobtechdev.se",
             OllamaEnabled = document.OllamaEnabled ?? true,
@@ -41,6 +42,9 @@ public sealed class SettingsLoader
     {
         [YamlMember(Alias = "action_delay")]
         public double? ActionDelay { get; init; }
+
+        [YamlMember(Alias = "personal_letter_editor_enabled")]
+        public bool? PersonalLetterEditorEnabled { get; init; }
 
         [YamlMember(Alias = "api_batch_size")]
         public int? ApiBatchSize { get; init; }

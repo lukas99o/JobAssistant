@@ -56,7 +56,7 @@ public sealed class SelectedFilesTests
 	}
 
 	[Fact]
-	public void GetOrCreateCopy_CreatesCopyInCopiesSubfolder()
+	public void CreateOrReplaceCopy_CreatesCopyInCopiesSubfolder()
 	{
 		var service = new DocumentCopyService();
 		var rootPath = Path.Combine(Path.GetTempPath(), $"jobassistant-copy-test-{Guid.NewGuid():N}");
@@ -67,7 +67,7 @@ public sealed class SelectedFilesTests
 			var sourcePath = Path.Combine(sourceDirectory.FullName, "CV.pdf");
 			File.WriteAllText(sourcePath, "cv-content");
 
-			var copy = service.GetOrCreateCopy(new FileInfo(sourcePath), "CV.Copies");
+			var copy = service.CreateOrReplaceCopy(new FileInfo(sourcePath), "CV.Copies");
 
 			Assert.NotNull(copy);
 			Assert.Equal(Path.Combine(sourceDirectory.FullName, "CV.Copies", "CV_C.pdf"), copy!.FullName);
@@ -84,7 +84,7 @@ public sealed class SelectedFilesTests
 	}
 
 	[Fact]
-	public void GetOrCreateCopy_ReusesExistingCopy()
+	public void CreateOrReplaceCopy_OverwritesExistingCopy()
 	{
 		var service = new DocumentCopyService();
 		var rootPath = Path.Combine(Path.GetTempPath(), $"jobassistant-copy-test-{Guid.NewGuid():N}");
@@ -99,11 +99,11 @@ public sealed class SelectedFilesTests
 			var existingCopyPath = Path.Combine(copiesDirectory.FullName, "CV_C.pdf");
 			File.WriteAllText(existingCopyPath, "existing-copy");
 
-			var copy = service.GetOrCreateCopy(new FileInfo(sourcePath), "CV.Copies");
+			var copy = service.CreateOrReplaceCopy(new FileInfo(sourcePath), "CV.Copies");
 
 			Assert.NotNull(copy);
 			Assert.Equal(existingCopyPath, copy!.FullName);
-			Assert.Equal("existing-copy", File.ReadAllText(copy.FullName));
+			Assert.Equal("original-content", File.ReadAllText(copy.FullName));
 		}
 		finally
 		{

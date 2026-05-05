@@ -4,6 +4,8 @@ public sealed record Settings
 {
     public double ActionDelay { get; init; } = 1.5;
 
+    public bool PersonalLetterEditorEnabled { get; init; } = true;
+
     public int ApiBatchSize { get; init; } = 25;
 
     public string ApiBaseUrl { get; init; } = "https://jobsearch.api.jobtechdev.se";

@@ -82,7 +82,7 @@ The current .NET console flow will:
 3. Fetch JobTech results page by page
 4. Fetch full job ads and summarize each description with Ollama, plus extract keywords
 5. Filter out already processed jobs
-6. Open a temporary editor window for personal-letter text before textarea autofill or text-file uploads
+6. Recreate one reusable personal-letter TXT/PDF working copy per application, optionally open the TXT copy for editing, and upload the updated copy when needed
 7. Open external applications in Playwright, fill simple forms, and route uploads
 8. Fall back to manual review for email applications and more complex forms
 
@@ -101,6 +101,7 @@ Open `config\settings.yaml` to adjust behaviour:
 | `auto_submit` | `false` | Submit simple forms automatically after autofill |
 | `auto_accept_cookies` | `true` | Used by the browser layer |
 | `action_delay` | `1.5` | Delay between browser actions |
+| `personal_letter_editor_enabled` | `true` | Open the personal-letter draft in an editor before continuing |
 | `browser_slow_mo` | `500` | Milliseconds between Playwright actions |
 | `api_batch_size` | `25` | Number of jobs to fetch per page |
 | `ollama_enabled` | `true` | Enable or disable Ollama-based enrichment |

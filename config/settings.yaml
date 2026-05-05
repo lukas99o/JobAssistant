@@ -3,6 +3,9 @@
 # Delay in seconds between actions (for visibility)
 action_delay: 1.5
 
+# Open the personal letter text copy in an editor before continuing
+personal_letter_editor_enabled: true
+
 # Number of job listings to fetch per API page
 api_batch_size: 25
 

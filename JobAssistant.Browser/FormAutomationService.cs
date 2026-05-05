@@ -105,6 +105,8 @@ public sealed class FormAutomationService
         ["meriterande"] = "Yes",
     };
 
+    private static readonly DocumentCopyService CopyService = new();
+
     private static readonly string[] CvKeywords = ["cv", "resume", "curriculum", "meritförteckning", "cv/resume"];
     private static readonly string[] LetterKeywords = ["personligt brev", "personal letter", "cover letter", "brev", "motivational", "motivation"];
     private static readonly string[] OtherKeywords = ["other", "övrigt", "övriga", "additional", "attachment", "bilaga", "dokument"];
@@ -280,7 +282,7 @@ public sealed class FormAutomationService
             CliConsole.WriteLine($"  Complex form detected: {analysis.Reason}. Attempting partial autofill.");
         }
 
-        var preparedPersonalLetter = await PreparePersonalLetterAsync(page, analysis, selectedFiles, job, cancellationToken);
+        var preparedPersonalLetter = await PreparePersonalLetterAsync(page, analysis, selectedFiles, settings, job, cancellationToken);
         ReportPreparedPersonalLetter(preparedPersonalLetter);
         var filledCount = 0;
 
@@ -366,10 +368,11 @@ public sealed class FormAutomationService
     public async Task PreparePersonalLetterForManualApplicationAsync(
         IPage page,
         SelectedFiles selectedFiles,
+        Settings settings,
         JobListing? job = null,
         CancellationToken cancellationToken = default)
     {
-        var preparedPersonalLetter = await PreparePersonalLetterAsync(page, selectedFiles, needsEditableLetter: true, job, cancellationToken);
+        var preparedPersonalLetter = await PreparePersonalLetterAsync(page, selectedFiles, needsEditableLetter: true, settings, job, cancellationToken);
         ReportPreparedPersonalLetter(preparedPersonalLetter);
     }
 
@@ -521,16 +524,18 @@ public sealed class FormAutomationService
         IPage page,
         FormAnalysis analysis,
         SelectedFiles selectedFiles,
+        Settings settings,
         JobListing? job,
         CancellationToken cancellationToken)
     {
-        return await PreparePersonalLetterAsync(page, selectedFiles, NeedsEditablePersonalLetter(analysis), job, cancellationToken);
+        return await PreparePersonalLetterAsync(page, selectedFiles, NeedsEditablePersonalLetter(analysis), settings, job, cancellationToken);
     }
 
     private static async Task<PreparedPersonalLetter> PreparePersonalLetterAsync(
         IPage page,
         SelectedFiles selectedFiles,
         bool needsEditableLetter,
+        Settings settings,
         JobListing? job,
         CancellationToken cancellationToken)
     {
@@ -546,7 +551,7 @@ public sealed class FormAutomationService
             return PreparedPersonalLetter.Empty;
         }
 
-        var editableDraft = CreateEditableDraft(editableTextSource);
+        var editableDraft = PrepareEditableTextCopy(editableTextSource);
         InjectApplicationReference(editableDraft, job);
         using var contextViewer = OpenJobContextViewer(job);
         if (contextViewer is not null)
@@ -554,8 +559,16 @@ public sealed class FormAutomationService
             CliConsole.WriteLine("  Opened job context window.");
         }
 
-        CliConsole.WriteLine("  Opening personal letter editor. Save and close the window to continue...");
-        await OpenEditorAsync(editableDraft, waitForExit: true, cancellationToken);
+        if (settings.PersonalLetterEditorEnabled)
+        {
+            CliConsole.WriteLine("  Opening personal letter editor. Save and close the window to continue...");
+            await OpenEditorAsync(editableDraft, waitForExit: true, cancellationToken);
+        }
+        else
+        {
+            CliConsole.WriteLine("  Personal letter editor disabled in settings. Using the prepared draft without opening an editor.");
+        }
+
         var tailoredText = TryReadTextFile(editableDraft);
         var editablePdfCopy = await CreateEditablePdfCopyAsync(page, selectedFiles.PersonalLetterPath, editableDraft, tailoredText);
 
@@ -593,17 +606,10 @@ public sealed class FormAutomationService
             || analysis.Fields.Any(field => field.IsFileUpload && MatchFileUpload(field) == "letter");
     }
 
-    private static FileInfo CreateEditableDraft(FileInfo sourceFile)
+    private static FileInfo PrepareEditableTextCopy(FileInfo sourceFile)
     {
-        var draftsDirectory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "JobAssistant", "PersonalLetterDrafts"));
-        var baseName = string.Concat(Path.GetFileNameWithoutExtension(sourceFile.Name)
-            .Select(character => Path.GetInvalidFileNameChars().Contains(character) ? '_' : character));
-        var draftPath = Path.Combine(
-            draftsDirectory.FullName,
-            $"{baseName}_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid():N}.txt");
-
-        File.Copy(sourceFile.FullName, draftPath, overwrite: true);
-        return new FileInfo(draftPath);
+        return CopyService.CreateOrReplaceCopy(sourceFile, "PersonalLettersText.Copies")
+            ?? throw new InvalidOperationException("A personal letter text source is required to create an editable copy.");
     }
 
     private static void InjectApplicationReference(FileInfo editableDraft, JobListing? job)
@@ -667,7 +673,7 @@ public sealed class FormAutomationService
 
     private static async Task<FileInfo?> CreateEditablePdfCopyAsync(
         IPage page,
-        FileInfo? copiedPersonalLetterPdf,
+        FileInfo? personalLetterPdfSource,
         FileInfo editableTextDraft,
         string tailoredText)
     {
@@ -676,15 +682,10 @@ public sealed class FormAutomationService
             return null;
         }
 
-        var pdfPath = CreateEditablePdfPath(copiedPersonalLetterPdf, editableTextDraft);
+        var pdfPath = CreateEditablePdfPath(personalLetterPdfSource, editableTextDraft);
 
         try
         {
-            if (copiedPersonalLetterPdf?.Exists == true)
-            {
-                File.Copy(copiedPersonalLetterPdf.FullName, pdfPath.FullName, overwrite: true);
-            }
-
             var pdfPage = await page.Context.NewPageAsync();
             try
             {
@@ -716,22 +717,18 @@ public sealed class FormAutomationService
         }
     }
 
-    private static FileInfo CreateEditablePdfPath(FileInfo? copiedPersonalLetterPdf, FileInfo editableTextDraft)
+    private static FileInfo CreateEditablePdfPath(FileInfo? personalLetterPdfSource, FileInfo editableTextDraft)
     {
-        if (copiedPersonalLetterPdf?.Directory is not null)
+        if (personalLetterPdfSource?.Exists == true)
         {
-            var copyDirectory = copiedPersonalLetterPdf.Directory;
-            var pdfPath = Path.Combine(
-                copyDirectory.FullName,
-                $"{Path.GetFileNameWithoutExtension(copiedPersonalLetterPdf.Name)}_tailored_{Guid.NewGuid():N}.pdf");
-
-            return new FileInfo(pdfPath);
+            return CopyService.CreateOrReplaceCopy(personalLetterPdfSource, "PersonalLetters.Copies")
+                ?? throw new InvalidOperationException("A personal letter PDF source is required to create an editable PDF copy.");
         }
 
         var draftsDirectory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), "JobAssistant", "PersonalLetterDrafts"));
         var fallbackPath = Path.Combine(
             draftsDirectory.FullName,
-            $"{Path.GetFileNameWithoutExtension(editableTextDraft.Name)}_{Guid.NewGuid():N}.pdf");
+            $"{Path.GetFileNameWithoutExtension(editableTextDraft.Name)}.pdf");
 
         return new FileInfo(fallbackPath);
     }
