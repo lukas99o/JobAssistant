@@ -9,6 +9,12 @@ api_batch_size: 25
 # JobTech API base URL
 api_base_url: "https://jobsearch.api.jobtechdev.se"
 
+# Local LLM enrichment via Ollama
+ollama_enabled: true
+ollama_base_url: "http://127.0.0.1:11434"
+ollama_model: "qwen3.5:9b"
+ollama_timeout_seconds: 90
+
 # Browser settings
 browser_headless: false
 browser_slow_mo: 500  # milliseconds between Playwright actions

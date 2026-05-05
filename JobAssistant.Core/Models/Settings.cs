@@ -8,6 +8,14 @@ public sealed record Settings
 
     public string ApiBaseUrl { get; init; } = "https://jobsearch.api.jobtechdev.se";
 
+    public bool OllamaEnabled { get; init; } = true;
+
+    public string OllamaBaseUrl { get; init; } = "http://127.0.0.1:11434";
+
+    public string OllamaModel { get; init; } = "qwen2.5:9b";
+
+    public int OllamaTimeoutSeconds { get; init; } = 90;
+
     public bool BrowserHeadless { get; init; }
 
     public int BrowserSlowMo { get; init; } = 500;

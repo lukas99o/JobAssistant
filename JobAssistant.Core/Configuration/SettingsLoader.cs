@@ -25,6 +25,10 @@ public sealed class SettingsLoader
             ActionDelay = document.ActionDelay ?? 1.5,
             ApiBatchSize = document.ApiBatchSize ?? 25,
             ApiBaseUrl = document.ApiBaseUrl ?? "https://jobsearch.api.jobtechdev.se",
+            OllamaEnabled = document.OllamaEnabled ?? true,
+            OllamaBaseUrl = document.OllamaBaseUrl ?? "http://127.0.0.1:11434",
+            OllamaModel = document.OllamaModel ?? "qwen2.5:9b",
+            OllamaTimeoutSeconds = document.OllamaTimeoutSeconds ?? 90,
             BrowserHeadless = document.BrowserHeadless ?? false,
             BrowserSlowMo = document.BrowserSlowMo ?? 500,
             AutoSubmit = document.AutoSubmit ?? false,
@@ -43,6 +47,18 @@ public sealed class SettingsLoader
 
         [YamlMember(Alias = "api_base_url")]
         public string? ApiBaseUrl { get; init; }
+
+        [YamlMember(Alias = "ollama_enabled")]
+        public bool? OllamaEnabled { get; init; }
+
+        [YamlMember(Alias = "ollama_base_url")]
+        public string? OllamaBaseUrl { get; init; }
+
+        [YamlMember(Alias = "ollama_model")]
+        public string? OllamaModel { get; init; }
+
+        [YamlMember(Alias = "ollama_timeout_seconds")]
+        public int? OllamaTimeoutSeconds { get; init; }
 
         [YamlMember(Alias = "browser_headless")]
         public bool? BrowserHeadless { get; init; }

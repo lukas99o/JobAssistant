@@ -31,21 +31,12 @@ public sealed class JobListingTests
         Assert.Equal("123", listing.Id);
         Assert.Equal("Fullstackutvecklare", listing.Headline);
         Assert.Equal("Acme AB", listing.EmployerName);
+        Assert.Equal("Bygg moderna system.", listing.Description);
+        Assert.Equal(string.Empty, listing.CompanyDesc);
+        Assert.Empty(listing.CompanyKeywords);
         Assert.Equal("external", listing.ApplicationMethod);
         Assert.Equal("Fullstackutvecklare at Acme AB", listing.Summary);
         Assert.Equal("Stockholm", listing.WorkplaceCity);
         Assert.Equal("https://example.com/apply", listing.ApplicationUrl);
-    }
-
-    [Fact]
-    public void CompanyPurpose_TruncatesAtThreeThousandCharacters()
-    {
-        var listing = new JobListing
-        {
-            Description = new string('a', 3005),
-        };
-
-        Assert.Equal(3003, listing.CompanyPurpose.Length);
-        Assert.EndsWith("...", listing.CompanyPurpose);
     }
 }

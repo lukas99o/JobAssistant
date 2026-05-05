@@ -1,5 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using JobAssistant.Core.Models;
 
 namespace JobAssistant.Core.Services;
@@ -27,8 +28,15 @@ public sealed class JobHistoryStore
         if (_path.Exists)
         {
             var json = File.ReadAllText(_path.FullName);
-            _records = JsonSerializer.Deserialize<Dictionary<string, JobHistoryRecord>>(json, SerializerOptions)
+            var normalizedJson = NormalizeLegacySchema(json, out var migrated);
+            _records = JsonSerializer.Deserialize<Dictionary<string, JobHistoryRecord>>(normalizedJson, SerializerOptions)
                 ?? new Dictionary<string, JobHistoryRecord>(StringComparer.Ordinal);
+
+            if (migrated)
+            {
+                Save();
+            }
+
             return;
         }
 
@@ -56,7 +64,8 @@ public sealed class JobHistoryStore
             JobId = job.Id,
             CompanyName = job.EmployerName,
             Headline = job.Headline,
-            CompanyPurpose = job.CompanyPurpose,
+            CompanyDesc = job.CompanyDesc,
+            CompanyKeywords = job.CompanyKeywords,
             Summary = job.Summary,
             LastSearchDate = (searchDate ?? DateOnly.FromDateTime(DateTime.Today)).ToString("yyyy-MM-dd"),
             SearchQuery = searchQuery,
@@ -92,5 +101,63 @@ public sealed class JobHistoryStore
         }
 
         return stats;
+    }
+
+    private static string NormalizeLegacySchema(string json, out bool migrated)
+    {
+        var rootNode = JsonNode.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
+        if (rootNode is not JsonObject rootObject)
+        {
+            migrated = false;
+            return "{}";
+        }
+
+        migrated = false;
+
+        foreach (var (_, node) in rootObject.ToList())
+        {
+            if (node is not JsonObject record)
+            {
+                continue;
+            }
+
+            if (!record.ContainsKey("company_desc") && record.TryGetPropertyValue("company_purpose", out var legacyCompanyPurpose))
+            {
+                record["company_desc"] = legacyCompanyPurpose?.DeepClone();
+                migrated = true;
+            }
+
+            if (record.ContainsKey("company_purpose"))
+            {
+                record.Remove("company_purpose");
+                migrated = true;
+            }
+
+            if (!record.TryGetPropertyValue("company_keywords", out var companyKeywordsNode) || companyKeywordsNode is null)
+            {
+                record["company_keywords"] = new JsonArray();
+                migrated = true;
+                continue;
+            }
+
+            if (companyKeywordsNode is JsonValue keywordValue)
+            {
+                var serializedKeywords = keywordValue.ToJsonString();
+                var parsedKeywords = JsonSerializer.Deserialize<string>(serializedKeywords);
+                if (!string.IsNullOrWhiteSpace(parsedKeywords))
+                {
+                    var array = new JsonArray();
+                    foreach (var keyword in parsedKeywords.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        array.Add(keyword);
+                    }
+
+                    record["company_keywords"] = array;
+                    migrated = true;
+                }
+            }
+        }
+
+        return rootObject.ToJsonString(SerializerOptions);
     }
 }

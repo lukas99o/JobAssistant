@@ -12,6 +12,10 @@ public sealed record JobListing
 
     public string Description { get; init; } = string.Empty;
 
+    public string CompanyDesc { get; init; } = string.Empty;
+
+    public IReadOnlyList<string> CompanyKeywords { get; init; } = Array.Empty<string>();
+
     public string? ApplicationUrl { get; init; }
 
     public string? ApplicationEmail { get; init; }
@@ -29,20 +33,6 @@ public sealed record JobListing
         : !string.IsNullOrWhiteSpace(ApplicationEmail)
             ? "email"
             : "none";
-
-    public string CompanyPurpose
-    {
-        get
-        {
-            if (string.IsNullOrWhiteSpace(Description))
-            {
-                return string.Empty;
-            }
-
-            var text = Description.Trim();
-            return text.Length > 3000 ? $"{text[..3000]}..." : text;
-        }
-    }
 
     public string Summary => $"{Headline} at {EmployerName}";
 
@@ -69,6 +59,8 @@ public sealed record JobListing
             Headline = GetStringOrDefault(data, "headline"),
             EmployerName = GetStringOrDefault(employer, "name", "Unknown"),
             Description = description,
+            CompanyDesc = string.Empty,
+            CompanyKeywords = Array.Empty<string>(),
             ApplicationUrl = GetOptionalString(applicationDetails, "url"),
             ApplicationEmail = GetOptionalString(applicationDetails, "email"),
             ApplicationInfo = GetOptionalString(applicationDetails, "information"),

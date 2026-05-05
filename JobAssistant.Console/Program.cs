@@ -32,6 +32,8 @@ internal static class Program
 
 	private static async Task<int> Main()
 	{
+		var exitCode = 0;
+
 		CliConsole.WriteLine(new string('=', 50));
 		CliConsole.WriteLine("  Job Application Assistant");
 		CliConsole.WriteLine("  Arbetsformedlingen / JobTech API");
@@ -41,20 +43,34 @@ internal static class Program
 		var profile = LoadProfile();
 		var history = new JobHistoryStore(new FileInfo(Path.Combine(DataDirectory.FullName, "job_history.json")));
 		var stats = new SessionStats();
-
-		CliConsole.WriteLine($"\nAuto-submit: {(settings.AutoSubmit ? "ON" : "OFF")}");
-
-		var selectedFiles = DocumentSelector.SelectFiles(DocumentsDirectory);
-		var query = PromptSearchQuery();
+		SelectedFiles? selectedFiles = null;
+		var query = string.Empty;
 
 		using var apiClient = new JobSearchClient(settings);
+		using var descriptionEnricher = new JobDescriptionEnricher(settings);
 		await using var browser = new BrowserManager(settings);
 		var formAutomation = new FormAutomationService();
 
-		await browser.StartAsync();
-
 		try
 		{
+			if (settings.OllamaEnabled)
+			{
+				CliConsole.WriteLine("\nChecking Ollama availability...");
+				await descriptionEnricher.EnsureReadyAsync();
+				CliConsole.WriteLine($"  Ollama ready: {settings.OllamaModel} at {settings.OllamaBaseUrl}");
+			}
+			else
+			{
+				CliConsole.WriteLine("\nOllama enrichment disabled. Using local extraction.");
+			}
+
+			CliConsole.WriteLine($"\nAuto-submit: {(settings.AutoSubmit ? "ON" : "OFF")}");
+
+			selectedFiles = DocumentSelector.SelectFiles(DocumentsDirectory);
+			query = PromptSearchQuery();
+
+			await browser.StartAsync();
+
 			var offset = 0;
 
 			while (true)
@@ -88,6 +104,8 @@ internal static class Program
 						newJobs[index],
 						index + 1,
 						newJobs.Count,
+						apiClient,
+						descriptionEnricher,
 						browser,
 						formAutomation,
 						profile,
@@ -103,10 +121,17 @@ internal static class Program
 				ApplyMenuChoice(choice, hasMore, settings, ref selectedFiles, ref query, ref offset);
 			}
 		}
+		catch (JobDescriptionEnrichmentException exception)
+		{
+			CliConsole.WriteLine($"\nLLM enrichment error: {exception.Message}");
+			exitCode = 1;
+		}
 		finally
 		{
 			stats.Display();
 		}
+
+		return exitCode;
 	}
 
 	private static Settings LoadSettings()
@@ -159,6 +184,8 @@ internal static class Program
 		JobListing job,
 		int index,
 		int total,
+		JobSearchClient apiClient,
+		JobDescriptionEnricher descriptionEnricher,
 		BrowserManager browser,
 		FormAutomationService formAutomation,
 		UserProfile profile,
@@ -168,6 +195,8 @@ internal static class Program
 		string query,
 		SessionStats stats)
 	{
+		job = await EnrichJobAsync(job, apiClient, descriptionEnricher);
+
 		var city = string.IsNullOrWhiteSpace(job.WorkplaceCity) ? "Unknown location" : job.WorkplaceCity;
 		CliConsole.WriteLine($"\n[{index}/{total}] {job.Headline}");
 		CliConsole.WriteLine($"  Employer: {job.EmployerName} - {city}");
@@ -195,7 +224,7 @@ internal static class Program
 				}
 				else if (analysis.IsSimple)
 				{
-					await formAutomation.FillFormAsync(browser.Page, analysis, profile, selectedFiles, settings);
+					await formAutomation.FillFormAsync(browser.Page, analysis, profile, selectedFiles, settings, job: job);
 
 					if (!settings.AutoSubmit)
 					{
@@ -208,7 +237,7 @@ internal static class Program
 				else
 				{
 					CliConsole.WriteLine($"  {analysis.Reason}");
-					await formAutomation.FillFormAsync(browser.Page, analysis, profile, selectedFiles, settings, forceManual: true);
+					await formAutomation.FillFormAsync(browser.Page, analysis, profile, selectedFiles, settings, job: job, forceManual: true);
 					PromptForManualCompletion("  Complete any remaining fields and submit manually, then press Enter to continue...");
 					history.Record(job, "manual", query);
 					stats.Manual++;
@@ -231,7 +260,7 @@ internal static class Program
 			{
 				await browser.NavigateAsync(postingUrl);
 				CliConsole.WriteLine("  Opened job posting for manual review.");
-				await formAutomation.PreparePersonalLetterForManualApplicationAsync(browser.Page, selectedFiles);
+				await formAutomation.PreparePersonalLetterForManualApplicationAsync(browser.Page, selectedFiles, job);
 			}
 			catch (Exception exception)
 			{
@@ -265,6 +294,30 @@ internal static class Program
 		{
 			await Task.Delay(TimeSpan.FromSeconds(settings.ActionDelay));
 		}
+	}
+
+	private static async Task<JobListing> EnrichJobAsync(
+		JobListing job,
+		JobSearchClient apiClient,
+		JobDescriptionEnricher descriptionEnricher)
+	{
+		var detailedJob = await apiClient.GetAdAsync(job.Id) ?? job;
+		if (string.IsNullOrWhiteSpace(detailedJob.Description) && !string.IsNullOrWhiteSpace(job.Description))
+		{
+			detailedJob = detailedJob with { Description = job.Description };
+		}
+
+		var analysis = await descriptionEnricher.AnalyzeAsync(detailedJob.Description);
+		if (!string.IsNullOrWhiteSpace(analysis.WarningMessage))
+		{
+			CliConsole.WriteLine($"  {analysis.WarningMessage}");
+		}
+
+		return detailedJob with
+		{
+			CompanyDesc = analysis.CompanyDesc,
+			CompanyKeywords = analysis.CompanyKeywords.ToArray(),
+		};
 	}
 
 	private static string EndOfPageMenu(bool hasMore)

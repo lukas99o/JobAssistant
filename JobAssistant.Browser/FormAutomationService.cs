@@ -251,6 +251,7 @@ public sealed class FormAutomationService
         UserProfile profile,
         SelectedFiles selectedFiles,
         Settings settings,
+        JobListing? job = null,
         bool forceManual = false,
         CancellationToken cancellationToken = default)
     {
@@ -259,7 +260,7 @@ public sealed class FormAutomationService
             CliConsole.WriteLine($"  Complex form detected: {analysis.Reason}. Attempting partial autofill.");
         }
 
-        var preparedPersonalLetter = await PreparePersonalLetterAsync(page, analysis, selectedFiles, cancellationToken);
+        var preparedPersonalLetter = await PreparePersonalLetterAsync(page, analysis, selectedFiles, job, cancellationToken);
         ReportPreparedPersonalLetter(preparedPersonalLetter);
         var filledCount = 0;
 
@@ -345,9 +346,10 @@ public sealed class FormAutomationService
     public async Task PreparePersonalLetterForManualApplicationAsync(
         IPage page,
         SelectedFiles selectedFiles,
+        JobListing? job = null,
         CancellationToken cancellationToken = default)
     {
-        var preparedPersonalLetter = await PreparePersonalLetterAsync(page, selectedFiles, needsEditableLetter: true, cancellationToken);
+        var preparedPersonalLetter = await PreparePersonalLetterAsync(page, selectedFiles, needsEditableLetter: true, job, cancellationToken);
         ReportPreparedPersonalLetter(preparedPersonalLetter);
     }
 
@@ -461,15 +463,17 @@ public sealed class FormAutomationService
         IPage page,
         FormAnalysis analysis,
         SelectedFiles selectedFiles,
+        JobListing? job,
         CancellationToken cancellationToken)
     {
-        return await PreparePersonalLetterAsync(page, selectedFiles, NeedsEditablePersonalLetter(analysis), cancellationToken);
+        return await PreparePersonalLetterAsync(page, selectedFiles, NeedsEditablePersonalLetter(analysis), job, cancellationToken);
     }
 
     private static async Task<PreparedPersonalLetter> PreparePersonalLetterAsync(
         IPage page,
         SelectedFiles selectedFiles,
         bool needsEditableLetter,
+        JobListing? job,
         CancellationToken cancellationToken)
     {
         if (!needsEditableLetter)
@@ -485,8 +489,14 @@ public sealed class FormAutomationService
         }
 
         var editableDraft = CreateEditableDraft(editableTextSource);
+        using var contextViewer = OpenJobContextViewer(job);
+        if (contextViewer is not null)
+        {
+            CliConsole.WriteLine("  Opened job context window.");
+        }
+
         CliConsole.WriteLine("  Opening personal letter editor. Save and close the window to continue...");
-        await OpenEditorAsync(editableDraft, cancellationToken);
+        await OpenEditorAsync(editableDraft, waitForExit: true, cancellationToken);
         var tailoredText = TryReadTextFile(editableDraft);
         var editablePdfCopy = await CreateEditablePdfCopyAsync(page, selectedFiles.PersonalLetterPath, editableDraft, tailoredText);
 
@@ -537,7 +547,20 @@ public sealed class FormAutomationService
         return new FileInfo(draftPath);
     }
 
-    private static async Task OpenEditorAsync(FileInfo editableDraft, CancellationToken cancellationToken)
+    private static JobContextViewer? OpenJobContextViewer(JobListing? job)
+    {
+        try
+        {
+            return JobContextViewer.Open(job);
+        }
+        catch (Exception exception)
+        {
+            CliConsole.WriteLine($"  Could not open the job context window automatically: {exception.Message}");
+            return null;
+        }
+    }
+
+    private static async Task OpenEditorAsync(FileInfo editableDraft, bool waitForExit, CancellationToken cancellationToken)
     {
         try
         {
@@ -549,6 +572,11 @@ public sealed class FormAutomationService
             });
 
             if (process is null)
+            {
+                return;
+            }
+
+            if (!waitForExit)
             {
                 return;
             }

@@ -13,8 +13,11 @@ public sealed record JobHistoryRecord
     [JsonPropertyName("headline")]
     public string Headline { get; init; } = string.Empty;
 
-    [JsonPropertyName("company_purpose")]
-    public string CompanyPurpose { get; init; } = string.Empty;
+    [JsonPropertyName("company_desc")]
+    public string CompanyDesc { get; init; } = string.Empty;
+
+    [JsonPropertyName("company_keywords")]
+    public IReadOnlyList<string> CompanyKeywords { get; init; } = Array.Empty<string>();
 
     [JsonPropertyName("summary")]
     public string Summary { get; init; } = string.Empty;
