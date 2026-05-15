@@ -13,7 +13,7 @@ api_batch_size: 25
 api_base_url: "https://jobsearch.api.jobtechdev.se"
 
 # Local LLM enrichment via Ollama
-ollama_enabled: true
+ollama_enabled: false # Dont use unless you have powertfull pc you need to use ollama with model of your choice if want to change model change the model below and enable this setting 
 ollama_base_url: "http://127.0.0.1:11434"
 ollama_model: "qwen3.5:9b"
 ollama_timeout_seconds: 90

@@ -1,6 +1,7 @@
 # .NET build artifacts
 **/bin/
 **/obj/
+**/*.lscache
 TestResults/
 
 # Job history (runtime data)
