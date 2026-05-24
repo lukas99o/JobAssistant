@@ -58,6 +58,10 @@ Place your files in the relevant folders:
 - `documents\PersonalLettersText\` — your plain-text personal letter files for textarea-based forms
 - `documents\Other\` — any other attachments
 
+**5. Create job_history.json**
+
+Copy the example file and rename it to `job_history.json`.
+
 ## Running the application
 
 ```powershell
