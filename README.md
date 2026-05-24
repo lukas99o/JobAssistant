@@ -4,14 +4,12 @@ A .NET 10 console application for working through Arbetsförmedlingen job listin
 
 ## Current Status
 
-The repository has been switched over to the .NET implementation.
-
 Implemented today:
 - YAML-based settings and profile loading
 - Interactive document selection
 - JobTech API search
 - Local LLM enrichment of job descriptions via Ollama (`qwen2.5:9b`)
-- Job history persistence and deduplication
+- Job history persistence for tracking your applications and deduplication to avoid applying to the same job twice
 - Page-by-page browser application flow
 - Form analysis, simple-field autofill, and file upload routing
 - Root solution, test project, PowerShell launcher, and launcher smoke test
@@ -25,7 +23,7 @@ Still evolving:
 - Windows
 - .NET 10 SDK
 - Ollama
-- Ollama model: `qwen2.5:9b`
+- Ollama model: `model of your choice`
 
 ## Setup
 
@@ -59,10 +57,6 @@ Place your files in the relevant folders:
 - `documents\PersonalLetters\` — your uploadable personal letter, typically PDF
 - `documents\PersonalLettersText\` — your plain-text personal letter files for textarea-based forms
 - `documents\Other\` — any other attachments
-
-**5. Create job_history.json**
-
-Copy the example file and rename it to `job_history.json`.
 
 ## Running the application
 
